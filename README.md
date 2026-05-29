@@ -4,6 +4,10 @@ Single-file 3D-Visualisierung (`index.html`) der echten Starlink-Konstellation.
 Keine echte „Live"-Telemetrie — sondern **echte TLE-Bahnelemente** von Celestrak,
 clientseitig mit SGP4 (`satellite.js`) auf die Simulationszeit propagiert.
 
+**Sprache:** Default Englisch, umschaltbar auf Deutsch über den Sprach-Button (EN/DE)
+in der Navigationsleiste (Wahl wird in `localStorage` gemerkt). Alle Texte laufen
+über eine kleine i18n-Schicht (`STR`/`t()`/`data-i18n`); Zahlen folgen dem Gebietsschema.
+
 ## Datenfluss
 
 `loadStarlinkData()` versucht in dieser Reihenfolge (alles real, kein Fake-Fallback):
