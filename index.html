@@ -235,14 +235,6 @@
             <div class="flex justify-between"><span class="text-slate-400">Ø Umlaufzeit</span><span id="stat-period" class="font-medium tabular-nums">—</span></div>
             <div class="flex justify-between"><span class="text-slate-400">Ø Geschwindigkeit</span><span id="stat-vel" class="font-medium tabular-nums">—</span></div>
           </div>
-
-          <!-- Growth chart -->
-          <div class="pt-1">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-[10px] text-slate-500">Flotte nach Startjahr (kumuliert)</span>
-            </div>
-            <div id="growth-chart" class="text-[10px] text-slate-500"></div>
-          </div>
         </div>
       </div>
 
@@ -334,34 +326,24 @@
     <!-- RIGHT SIDEBAR -->
     <div class="w-80 border-l border-slate-800 bg-[#0a0c10] flex flex-col">
       
-      <!-- Selected launch tranche (detail) -->
+      <!-- Fleet growth over time -->
       <div class="p-5 border-b border-slate-800">
-        <div class="section-title mb-3">START-TRANCHE</div>
-        <div id="tranche-detail" class="min-h-[96px]">
-          <!-- Populated by renderTrancheDetail() -->
-        </div>
-      </div>
-
-      <!-- Launch tranche browser (the "string of pearls") -->
-      <div class="flex-1 flex flex-col p-5 min-h-0 border-b border-slate-800">
-        <div class="flex items-center justify-between mb-2">
-          <div class="section-title">START-TRANCHEN</div>
-          <div class="text-slate-500 text-[10px]">Hover = Kette · Esc = zurück</div>
-        </div>
-        <div id="tranche-list"
-             class="flex-1 overflow-auto pr-1 text-sm space-y-0.5">
-          <!-- Populated by renderTrancheList() -->
-        </div>
+        <div class="section-title mb-1">FLOTTEN-WACHSTUM</div>
+        <div class="text-[10px] text-slate-500 mb-3">Satelliten kumuliert nach Startjahr (aktuell getrackt)</div>
+        <div id="growth-chart"></div>
       </div>
 
       <!-- Cities — satellites currently visible overhead -->
-      <div class="p-5">
+      <div class="flex-1 p-5 min-h-0">
         <div class="flex items-center justify-between mb-2">
           <div class="section-title">SICHTBAR ÜBER STADT</div>
           <div class="text-slate-500 text-[10px]">≥25° • Klick zentriert</div>
         </div>
         <div id="cities-list" class="grid grid-cols-2 gap-x-3 gap-y-0.5">
           <!-- Populated by JS in renderCitiesList() — 2 columns to stay compact -->
+        </div>
+        <div class="mt-4 text-[10px] text-slate-500 leading-relaxed">
+          Satellit im Globus anklicken → ganze <span class="text-blue-300">Start-Kette</span> wird hervorgehoben · <span class="text-slate-300">Esc</span> = zurück
         </div>
       </div>
 
@@ -453,6 +435,7 @@
       { name: 'Mumbai',      lat: 19.0760, lon: 72.8777 },
       { name: 'São Paulo',   lat: -23.5505, lon: -46.6333 },
       { name: 'Sydney',      lat: -33.8688, lon: 151.2093 },
+      { name: 'Dubai',       lat: 25.2048, lon: 55.2708 },
       { name: 'Kapstadt',    lat: -33.9249, lon: 18.4241 },
       { name: 'Oslo',        lat: 59.9139, lon: 10.7522 },    // hohe Breite, Abdeckungsrand
       { name: 'Reykjavík',   lat: 64.1466, lon: -21.9426 }    // Polar-Schalen-Territorium
@@ -1094,13 +1077,9 @@
       updateDashboardStats()
       renderShellsUI()
 
-      // Create GPU points
+      // Create GPU points (full constellation visible; click a satellite to
+      // reveal its launch-tranche chain).
       createSatellitePoints()
-
-      // Build the tranche browser. Start with the FULL constellation visible
-      // (no dimming) — the user reveals a chain by hovering/clicking a tranche.
-      renderTrancheList()
-      renderTrancheDetail()
     }
 
     function showNoDataState() {
@@ -1481,88 +1460,17 @@
       }
     }
 
-    // ---- selection / hover-preview ----
+    // ---- selection (a launch tranche is selected by clicking one of its satellites) ----
     function selectTranche(key) {
       selectedTrancheKey = key
-      previewTrancheKey = null
       applyHighlight(key)
       drawTrancheOrbit(key)
-      renderTrancheDetail()
-      markActiveRow()
-    }
-    function previewTranche(key) {
-      previewTrancheKey = key
-      const active = key || selectedTrancheKey
-      applyHighlight(active)
-      drawTrancheOrbit(active)
     }
     function clearTranche() {
       selectedTrancheKey = null
-      previewTrancheKey = null
       applyHighlight(null)
       clearTrancheOrbit()
       clearTrancheLabels()
-      renderTrancheDetail()
-      markActiveRow()
-    }
-
-    function renderTrancheDetail() {
-      const el = document.getElementById('tranche-detail')
-      if (!el) return
-      const g = selectedTrancheKey ? launchGroupMap.get(selectedTrancheKey) : null
-      if (!g) {
-        el.innerHTML = `<div class="hud-panel rounded-xl p-4 border border-slate-700/50 text-xs text-slate-500 text-center">
-          Start-Tranche aus der Liste wählen<br>oder einen Satelliten im Globus anklicken.
-        </div>`
-        return
-      }
-      const col = shellColor(g.shellId)
-      el.innerHTML = `
-        <div class="hud-panel p-4 rounded-xl border border-blue-500/30">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="font-mono text-lg font-semibold text-blue-300">${g.label}</div>
-              <div class="text-xs text-slate-400 mt-px">Internationaler Designator</div>
-            </div>
-            <div class="px-2 py-px text-xs rounded font-medium" style="background:${col}22;color:${col}">${g.shellId.toUpperCase()}</div>
-          </div>
-          <div class="grid grid-cols-3 gap-x-2 mt-4 text-sm">
-            <div><div class="text-[10px] text-slate-400">Satelliten</div><div class="font-semibold tabular-nums">${g.count}</div></div>
-            <div><div class="text-[10px] text-slate-400">Ø Höhe</div><div class="font-semibold tabular-nums">${Math.round(g.avgAlt)} km</div></div>
-            <div><div class="text-[10px] text-slate-400">Startjahr</div><div class="font-semibold tabular-nums">${g.year || '—'}</div></div>
-          </div>
-          <button onclick="clearTranche()" class="mt-3 text-[10px] text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1">
-            <i class="fa-solid fa-times text-xs"></i> <span>Auswahl aufheben</span>
-          </button>
-        </div>`
-    }
-
-    function renderTrancheList() {
-      const c = document.getElementById('tranche-list')
-      if (!c) return
-      c.innerHTML = ''
-      launchGroups.forEach(g => {
-        const row = document.createElement('div')
-        row.dataset.key = g.key
-        row.className = 'tranche-row data-row flex items-center justify-between gap-2 py-1 px-2 rounded cursor-pointer hover:bg-slate-800/50'
-        row.innerHTML = `
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="w-2 h-2 rounded-full shrink-0" style="background:${shellColor(g.shellId)}"></span>
-            <span class="text-slate-200 truncate">${g.label}</span>
-          </div>
-          <span class="px-2 py-px text-[10px] rounded bg-slate-800 text-slate-300 tabular-nums shrink-0">${g.count}</span>`
-        row.onmouseenter = () => previewTranche(g.key)
-        row.onmouseleave = () => previewTranche(null)
-        row.onclick = () => { selectedTrancheKey === g.key ? clearTranche() : selectTranche(g.key) }
-        c.appendChild(row)
-      })
-      markActiveRow()
-    }
-    function markActiveRow() {
-      document.querySelectorAll('.tranche-row').forEach(r => {
-        const on = r.dataset.key === selectedTrancheKey
-        r.classList.toggle('bg-blue-500/15', on)
-      })
     }
 
     // ============================================
@@ -1671,11 +1579,8 @@
 
       if (closestIdx >= 0) {
         const key = satData[closestIdx].launchKey || 'unbek'
-        if (key === selectedTrancheKey) { clearTranche(); return }   // click same → toggle off
-        selectTranche(key)
-        // scroll the list to the chosen tranche
-        const row = document.querySelector(`.tranche-row[data-key="${key}"]`)
-        if (row) row.scrollIntoView({ block: 'nearest' })
+        if (key === selectedTrancheKey) clearTranche()   // click same chain → toggle off
+        else selectTranche(key)
       } else if (selectedTrancheKey) {
         clearTranche()   // clicked empty space → back to the full constellation
       }
@@ -1754,7 +1659,9 @@
       drawGrowthChart()
     }
 
-    // Mini cumulative area chart: how much of today's fleet was launched up to each year.
+    // Cumulative growth chart WITH reference points: a labelled Y axis (gridlines with
+    // values) and an X axis with year ticks + per-year dots — so it shows scale & relation,
+    // not just an unanchored upward curve.
     function drawGrowthChart() {
       const host = document.getElementById('growth-chart')
       if (!host) return
@@ -1762,32 +1669,57 @@
       if (!years.length) { host.innerHTML = ''; return }
 
       const y0 = years[0], y1 = years[years.length - 1]
-      const series = []
+      const series = []   // [{year, cum, add}]
       let cum = 0
-      for (let y = y0; y <= y1; y++) { cum += (constStats.byYear[y] || 0); series.push(cum) }
-      const maxCum = series[series.length - 1] || 1
+      for (let y = y0; y <= y1; y++) { const add = constStats.byYear[y] || 0; cum += add; series.push({ year: y, cum, add }) }
+      const total = cum
 
-      const W = 232, H = 60, base = H - 12
-      const stepX = series.length > 1 ? W / (series.length - 1) : 0
-      const px = i => (i * stepX)
-      const py = v => base - (v / maxCum) * (base - 4)
+      // Nice rounded Y max + 3 gridlines (0, mid, max)
+      const niceMax = Math.ceil(total / 2000) * 2000 || 2000
+      const yTicks = [0, niceMax / 2, niceMax]
+      const fmtK = v => v >= 1000 ? (v / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + 'k' : String(v)
 
-      let line = ''
-      series.forEach((v, i) => { line += (i ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(v).toFixed(1) + ' ' })
-      const area = `M0 ${base} ` + series.map((v, i) => 'L' + px(i).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ') + ` L${W} ${base} Z`
+      // SVG coordinate system (viewBox units)
+      const W = 280, H = 132
+      const mL = 26, mR = 6, mT = 8, mB = 18
+      const plotW = W - mL - mR, plotH = H - mT - mB
+      const n = series.length
+      const px = i => mL + (n > 1 ? (i / (n - 1)) * plotW : plotW / 2)
+      const py = v => mT + plotH - (v / niceMax) * plotH
+
+      let grid = '', line = '', dots = '', xlabels = ''
+      yTicks.forEach(v => {
+        const y = py(v).toFixed(1)
+        grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#1e293b" stroke-width="1"/>`
+        grid += `<text x="${mL - 4}" y="${(+y + 3).toFixed(1)}" fill="#64748b" font-size="9" text-anchor="end">${fmtK(v)}</text>`
+      })
+      series.forEach((p, i) => {
+        const x = px(i).toFixed(1), y = py(p.cum).toFixed(1)
+        line += (i ? 'L' : 'M') + x + ' ' + y + ' '
+        dots += `<circle cx="${x}" cy="${y}" r="2" fill="#60a5fa"/>`
+        // label every year (short '19) — they're only ~8
+        xlabels += `<text x="${x}" y="${H - 5}" fill="#64748b" font-size="9" text-anchor="middle">'${String(p.year).slice(2)}</text>`
+      })
+      const area = `M${px(0).toFixed(1)} ${py(0).toFixed(1)} ` +
+        series.map((p, i) => 'L' + px(i).toFixed(1) + ' ' + py(p.cum).toFixed(1)).join(' ') +
+        ` L${px(n - 1).toFixed(1)} ${py(0).toFixed(1)} Z`
 
       host.innerHTML = `
-        <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block">
+        <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
           <defs><linearGradient id="gw" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#3b82f6" stop-opacity="0.45"/>
+            <stop offset="0" stop-color="#3b82f6" stop-opacity="0.4"/>
             <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
           </linearGradient></defs>
+          ${grid}
           <path d="${area}" fill="url(#gw)"/>
-          <path d="${line}" fill="none" stroke="#60a5fa" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
-          <text x="1" y="${H - 1}" fill="#64748b" font-size="9">${y0}</text>
-          <text x="${W - 1}" y="${H - 1}" fill="#64748b" font-size="9" text-anchor="end">${y1}</text>
+          <path d="${line}" fill="none" stroke="#60a5fa" stroke-width="1.5"/>
+          ${dots}
+          ${xlabels}
         </svg>
-        <div class="mt-0.5 tabular-nums">${maxCum.toLocaleString('de-DE')} Sats · ${y0}–${y1}</div>`
+        <div class="flex justify-between text-[10px] text-slate-500 tabular-nums mt-1">
+          <span>${total.toLocaleString('de-DE')} Sats gesamt</span>
+          <span>+${series[series.length - 1].add.toLocaleString('de-DE')} in ${y1}</span>
+        </div>`
     }
 
     // Honest source/freshness indicator — where the TLE came from and how old it is.
@@ -1899,9 +1831,10 @@
       // Update sim time display while time is advancing
       if (timeMultiplier > 0) updateSimTimeDisplay()
 
-      // Name labels for the active tranche's members (chain of pearls), every frame
-      const _activeTranche = previewTrancheKey || selectedTrancheKey
-      if (_activeTranche) updateTrancheLabels()
+      // Name labels for the active tranche's members (chain of pearls). Always call it —
+      // when nothing is selected it clears any leftover labels (fixes stuck/frozen labels).
+      const _activeTranche = selectedTrancheKey
+      updateTrancheLabels()
 
       // Keep the tranche's orbit track current as simulation time advances
       if (_activeTranche && timeMultiplier > 0) {

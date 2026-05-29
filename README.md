@@ -21,13 +21,12 @@ zeigt die App einen ehrlichen Leerzustand statt erfundener Daten.
 
 - Getrackte Satelliten, Ø Höhe, Ø Umlaufzeit, Ø Geschwindigkeit
 - Schalen-Verteilung (approximiert aus Inklination & Bahnhöhe)
-- **Start-Tranchen ("Perlenkette")**: Satelliten gruppiert nach echtem Launch
-  (aus dem International Designator). Hover/Klick auf eine Tranche hebt die ganze
-  Kette als leuchtende Punktreihe hervor, zeichnet ihre Orbit-Bahn und blendet
-  Namen entlang der Kette ein; der Rest dimmt. Klick auf einen Satelliten im
-  Globus wählt dessen Tranche. Liste rechts, neueste Starts zuerst.
+- **Start-Tranchen ("Perlenkette")**: Klick auf einen Satelliten im Globus hebt
+  seine ganze Start-Tranche hervor (gruppiert über den International Designator) —
+  als leuchtende Punktreihe mit Orbit-Bahn und Namen entlang der Kette, Rest dimmt.
+  Klick auf leere Stelle, nochmal denselben, oder **Esc** = zurück zur Vollansicht.
 - **Sichtbar über Stadt**: Anzahl Satelliten aktuell ≥ 25° über dem lokalen Horizont
-  (echte Elevationswinkel-Geometrie) für 11 Städte inkl. Hochbreiten wie Oslo &
+  (echte Elevationswinkel-Geometrie) für 12 Städte inkl. Hochbreiten wie Oslo &
   Reykjavík — macht den Abdeckungs-Gradient sichtbar (Pol = wenige, Mittelbreiten = viele).
 - **Nächste Starts**: kommende SpaceX/Starlink-Launches live von The Space Devs
   (Launch Library 2). Zeigt die Schalen-Tendenz (aus dem Startplatz abgeleitet:
