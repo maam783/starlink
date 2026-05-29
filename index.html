@@ -330,6 +330,18 @@
           <span>Name</span>
         </button>
       </div>
+
+      <!-- Zoom controls (left-center) — präziser als Touchpad-Zoom -->
+      <div class="absolute left-5 top-1/2 -translate-y-1/2 flex flex-col items-center z-20">
+        <button onclick="zoomBy(-1)" title="Heranzoomen (+)" aria-label="Heranzoomen"
+                class="control-btn w-9 h-9 flex items-center justify-center bg-slate-900/90 border border-slate-700 rounded-t-lg hover:border-blue-500/40 text-slate-200">
+          <i class="fa-solid fa-plus text-xs"></i>
+        </button>
+        <button onclick="zoomBy(1)" title="Herauszoomen (−)" aria-label="Herauszoomen"
+                class="control-btn w-9 h-9 flex items-center justify-center bg-slate-900/90 border border-slate-700 border-t-0 rounded-b-lg hover:border-blue-500/40 text-slate-200">
+          <i class="fa-solid fa-minus text-xs"></i>
+        </button>
+      </div>
     </div>
 
     <!-- RIGHT SIDEBAR -->
@@ -605,6 +617,13 @@
       canvas.addEventListener('wheel', onWheel, { passive: false })
       canvas.addEventListener('click', onCanvasClick)
       window.addEventListener('resize', onResize)
+
+      // Keyboard zoom: +/= zoom in, -/_ zoom out
+      window.addEventListener('keydown', (e) => {
+        if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return
+        if (e.key === '+' || e.key === '=') { zoomBy(-1); e.preventDefault() }
+        else if (e.key === '-' || e.key === '_') { zoomBy(1); e.preventDefault() }
+      })
       
       // Permanent label overlay container.
       // pointer-events:none on the container + the isDragging guard above completely protects
@@ -1470,11 +1489,40 @@
       updateCameraPosition()
     }
 
+    const ZOOM_MIN = 8, ZOOM_MAX = 58
+
     function onWheel(e) {
       e.preventDefault()
-      cameraDistance *= (e.deltaY > 0 ? 1.08 : 0.92)
-      cameraDistance = Math.max(8, Math.min(58, cameraDistance))
+      // Proportional to scroll magnitude (exp = smooth & multiplicative), but gentle.
+      // Trackpads emit many small-delta events; the small factor keeps that controllable
+      // instead of the old fixed 8%-per-event step that compounded far too fast.
+      const factor = Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.0016)
+      cameraDistance = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, cameraDistance * factor))
       updateCameraPosition()
+    }
+
+    // Smoothly animate cameraDistance toward a target (used by the +/- UI buttons & keys).
+    let _zoomAnim = null
+    function animateZoom(target) {
+      target = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, target))
+      const start = cameraDistance
+      const startT = Date.now()
+      const dur = 240
+      if (_zoomAnim) cancelAnimationFrame(_zoomAnim)
+      function step() {
+        const p = Math.min(1, (Date.now() - startT) / dur)
+        const e = 1 - Math.pow(1 - p, 3)
+        cameraDistance = start + (target - start) * e
+        updateCameraPosition()
+        if (p < 1) _zoomAnim = requestAnimationFrame(step)
+        else _zoomAnim = null
+      }
+      step()
+    }
+
+    // dir < 0 → zoom in (closer); dir > 0 → zoom out (farther). ~20% per click.
+    function zoomBy(dir) {
+      animateZoom(cameraDistance * (dir < 0 ? 0.80 : 1.25))
     }
 
     function onCanvasClick(e) {
