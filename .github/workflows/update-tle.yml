@@ -1,0 +1,68 @@
+name: Update Starlink TLE
+
+# Keeps data/starlink.tle fresh so the site always has real orbital data,
+# independent of Celestrak's uptime / rate limits at page-load time.
+
+on:
+  schedule:
+    # Daily at 05:00 UTC. Celestrak refreshes ~every 2h; daily is plenty for a viz.
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}   # allow manual runs from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-tle
+  cancel-in-progress: false
+
+jobs:
+  update-tle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Starlink TLE from Celestrak
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          tmp="$(mktemp)"
+
+          # Primary: canonical NORAD catalog group. Fallback: SpaceX supplemental ephemeris.
+          PRIMARY="https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle"
+          FALLBACK="https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle"
+
+          fetch_ok() {
+            # $1 = url -> writes to $tmp, returns 0 if it looks like real TLE
+            curl -fsSL --retry 3 --retry-delay 5 -A "starlink-tle-updater (github actions)" "$1" -o "$tmp" || return 1
+            local sets
+            sets="$(grep -c '^1 ' "$tmp" || true)"
+            echo "  -> $sets TLE sets from $1"
+            [ "$sets" -gt 500 ]
+          }
+
+          if fetch_ok "$PRIMARY"; then
+            echo "Using primary (GROUP=starlink)"
+          elif fetch_ok "$FALLBACK"; then
+            echo "Using supplemental fallback"
+          else
+            echo "::error::Could not fetch valid Starlink TLE from Celestrak (rate-limited or down)."
+            exit 1
+          fi
+
+          mv "$tmp" data/starlink.tle
+          echo "Wrote $(grep -c '^1 ' data/starlink.tle) satellites to data/starlink.tle"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- data/starlink.tle; then
+            echo "No change in TLE data — nothing to commit."
+          else
+            git add data/starlink.tle
+            git commit -m "chore: update Starlink TLE snapshot ($(date -u +%Y-%m-%d))"
+            git push
+          fi
