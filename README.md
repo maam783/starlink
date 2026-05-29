@@ -21,7 +21,11 @@ zeigt die App einen ehrlichen Leerzustand statt erfundener Daten.
 
 - Getrackte Satelliten, Ø Höhe, Ø Umlaufzeit, Ø Geschwindigkeit
 - Schalen-Verteilung (approximiert aus Inklination & Bahnhöhe)
-- Pro Satellit: Name, **echte NORAD-ID**, Höhe, Inklination, Geschw., Umlaufzeit, Sub-Punkt
+- **Start-Tranchen ("Perlenkette")**: Satelliten gruppiert nach echtem Launch
+  (aus dem International Designator). Hover/Klick auf eine Tranche hebt die ganze
+  Kette als leuchtende Punktreihe hervor, zeichnet ihre Orbit-Bahn und blendet
+  Namen entlang der Kette ein; der Rest dimmt. Klick auf einen Satelliten im
+  Globus wählt dessen Tranche. Liste rechts, neueste Starts zuerst.
 - **Sichtbar über Stadt**: Anzahl Satelliten aktuell ≥ 25° über dem lokalen Horizont
   (echte Elevationswinkel-Geometrie aus den propagierten Positionen)
 - TLE-Quelle (live / cache / paket) + TLE-Epoche (wie alt die Bahndaten sind)
@@ -46,6 +50,8 @@ Verfügbarkeit/Limits zur Ladezeit. Manuell auslösbar über den **Actions**-Tab
 
 - Tailwind & Font-Awesome kommen per CDN (Play-CDN) — für „echte" Produktion ein
   Build-Step sinnvoll, aber funktional unkritisch.
-- Steuerung ist Maus/Trackpad-basiert (kein Touch); Layout ist auf Desktop-Breite ausgelegt.
-- „Orbiten anzeigen" zeichnet **repräsentative** Bahnen pro Schale (Illustration der
-  Inklination), nicht die exakten Tracks der einzelnen Satelliten.
+- Steuerung ist Maus/Trackpad-basiert (kein Touch); Layout ist auf Desktop-Breite
+  ausgelegt. Zoom per +/- Buttons, Mausrad oder Tastatur (+/-).
+- Die Orbit-Bahn einer Tranche wird aus **einem** repräsentativen Mitglied
+  propagiert (eine Umlaufzeit) — sie zeigt den Pfad der Kette, nicht jede
+  Einzelbahn separat.

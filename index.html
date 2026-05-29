@@ -315,22 +315,6 @@
         </div>
       </div>
       
-      <!-- Center bottom controls -->
-      <div class="absolute bottom-4 right-4 flex gap-2 z-20">
-        <button onclick="toggleOrbits()" id="toggle-orbits-btn"
-                title="Zeigt die echte Orbit-Bahn des ausgewählten Satelliten (SGP4-propagiert)"
-                class="control-btn flex items-center gap-x-2 px-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500/40">
-          <i class="fa-solid fa-route"></i>
-          <span>Orbit-Bahn</span>
-        </button>
-        <button onclick="toggleLabels()" id="toggle-labels-btn"
-                title="Blendet den Namen des ausgewählten Satelliten am Globus ein"
-                class="control-btn flex items-center gap-x-2 px-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500/40">
-          <i class="fa-solid fa-tag"></i>
-          <span>Name</span>
-        </button>
-      </div>
-
       <!-- Zoom controls (left-center) — präziser als Touchpad-Zoom -->
       <div class="absolute left-5 top-1/2 -translate-y-1/2 flex flex-col items-center z-20">
         <button onclick="zoomBy(-1)" title="Heranzoomen (+)" aria-label="Heranzoomen"
@@ -347,29 +331,33 @@
     <!-- RIGHT SIDEBAR -->
     <div class="w-80 border-l border-slate-800 bg-[#0a0c10] flex flex-col">
       
-      <!-- Selected Satellite -->
+      <!-- Selected launch tranche (detail) -->
       <div class="p-5 border-b border-slate-800">
-        <div class="section-title mb-3">AUSGEWÄHLTER SATELLIT</div>
-        
-        <div id="selected-sat-panel" class="min-h-[128px]">
-          <div class="hud-panel h-[128px] rounded-xl flex flex-col items-center justify-center border border-slate-700/50">
-            <i class="fa-solid fa-satellite text-slate-700 text-3xl mb-2"></i>
-            <div class="text-xs text-slate-500 text-center">
-              Klicken Sie einen Satelliten<br>im Globus an
-            </div>
-          </div>
+        <div class="section-title mb-3">START-TRANCHE</div>
+        <div id="tranche-detail" class="min-h-[96px]">
+          <!-- Populated by renderTrancheDetail() -->
         </div>
       </div>
 
-      <!-- Cities (replaces fake Live Telemetry) -->
-      <div class="flex-1 flex flex-col p-5 min-h-0">
+      <!-- Launch tranche browser (the "string of pearls") -->
+      <div class="flex-1 flex flex-col p-5 min-h-0 border-b border-slate-800">
+        <div class="flex items-center justify-between mb-2">
+          <div class="section-title">START-TRANCHEN</div>
+          <div class="text-slate-500 text-[10px]">neueste zuerst • Hover = Kette</div>
+        </div>
+        <div id="tranche-list"
+             class="flex-1 overflow-auto pr-1 text-sm space-y-0.5">
+          <!-- Populated by renderTrancheList() -->
+        </div>
+      </div>
+
+      <!-- Cities — satellites currently visible overhead -->
+      <div class="p-5">
         <div class="flex items-center justify-between mb-2">
           <div class="section-title">SICHTBAR ÜBER STADT</div>
           <div class="text-slate-500 text-[10px]">≥25° • Klick zentriert</div>
         </div>
-        
-        <div id="cities-list" 
-             class="flex-1 overflow-auto pr-1 text-sm space-y-1">
+        <div id="cities-list" class="text-sm space-y-0.5">
           <!-- Populated by JS in renderCitiesList() -->
         </div>
       </div>
@@ -447,15 +435,11 @@
     let earth, clouds, atmosphere
     let stars
     let satellitePoints, orbitLinesGroup, continentOutlines
-    let satData = []                 // { satrec, name, color, shellId, altitude, ... }
-    let selectedSatIndex = -1
+    let satData = []                 // { satrec, name, color, shellId, altitude, launchKey, ... }
     let timeMultiplier = 0
     let simTime = new Date()
     let lastRealTime = Date.now()
-    let showOrbits = false
-    let showLabels = false
-    let selectedOrbitLine = null   // THREE.Line: real orbit track of the selected satellite
-    let selectedLabelEl = null     // single DOM label pinned to the selected satellite
+    let selectedOrbitLine = null   // THREE.Line: orbit track of the active tranche
     let raycaster, mouse
     let isDragging = false, previousMouseX = 0, previousMouseY = 0
     let cameraAzimuth = 2.1, cameraElevation = 0.65, cameraDistance = 22
@@ -1126,8 +1110,16 @@
       updateDashboardStats()
       renderShellsUI()
 
+      // Group satellites into launch tranches (the "string of pearls")
+      buildLaunchGroups()
+
       // Create GPU points
       createSatellitePoints()
+
+      // Build the tranche browser. Start with the FULL constellation visible
+      // (no dimming) — the user reveals a chain by hovering/clicking a tranche.
+      renderTrancheList()
+      renderTrancheDetail()
     }
 
     function showNoDataState() {
@@ -1187,6 +1179,19 @@
           else if (inc < 48) { shellId = '43e'; color = '#a78bfa' }
           else if (altitude < 520) { shellId = '53b'; color = '#60a5fa' }
 
+          // International Designator (TLE line 1, cols 10-17): "YYNNNPPP".
+          // YYNNN identifies the LAUNCH (year + launch-of-year) → groups a tranche.
+          const intl = l1.substring(9, 17).trim()
+          let launchKey = 'unbek', launchLabel = 'unbekannt', launchYear = 0, launchNum = 0
+          const m = intl.match(/^(\d{2})(\d{3})/)
+          if (m) {
+            const yy = parseInt(m[1], 10)
+            launchYear = yy < 57 ? 2000 + yy : 1900 + yy
+            launchNum = parseInt(m[2], 10)
+            launchKey = m[1] + m[2]
+            launchLabel = `${launchYear}-${m[2]}`
+          }
+
           sats.push({
             name: name.replace(/^0 /, '').substring(0, 18),
             noradId: String(satrec.satnum),
@@ -1196,7 +1201,11 @@
             inclination: inc,
             altitude,
             period,
-            velocity
+            velocity,
+            launchKey,
+            launchLabel,
+            launchYear,
+            launchNum
           })
         } catch (err) {
           // ignore malformed TLE entries
@@ -1331,47 +1340,104 @@
     }
 
     // ============================================
-    // ORBIT LINES (Representative planes)
+    // LAUNCH TRANCHES ("string of pearls")
     // ============================================
-    // Draw the REAL orbit track of the currently selected satellite by propagating
-    // it forward one full period. Uses the exact same geodetic→scene mapping as the
-    // satellite dots, so the line aligns perfectly with the moving point.
-    function drawSelectedOrbit() {
-      clearSelectedOrbit()
-      if (!showOrbits) return
+    let launchGroups = []            // sorted, newest first
+    let launchGroupMap = new Map()   // key → group
+    let selectedTrancheKey = null
+    let previewTrancheKey = null
 
-      const sat = satData[selectedSatIndex]
-      if (!sat || !sat.satrec) return
-      if (!shellVisibility[sat.shellId]) return   // shell hidden → no orbit either
+    function buildLaunchGroups() {
+      launchGroupMap = new Map()
+      for (let i = 0; i < satData.length; i++) {
+        const s = satData[i]
+        const key = s.launchKey || 'unbek'
+        let g = launchGroupMap.get(key)
+        if (!g) {
+          g = { key, label: s.launchLabel || key, year: s.launchYear || 0, num: s.launchNum || 0,
+                indices: [], shellCounts: {}, sumAlt: 0 }
+          launchGroupMap.set(key, g)
+        }
+        g.indices.push(i)
+        g.shellCounts[s.shellId] = (g.shellCounts[s.shellId] || 0) + 1
+        g.sumAlt += s.altitude
+      }
+      launchGroups = Array.from(launchGroupMap.values()).map(g => {
+        g.count = g.indices.length
+        g.avgAlt = g.sumAlt / g.count
+        g.shellId = Object.entries(g.shellCounts).sort((a, b) => b[1] - a[1])[0][0]
+        g._set = new Set(g.indices)
+        return g
+      })
+      launchGroups.sort((a, b) => (b.year - a.year) || (b.num - a.num))
+    }
+
+    function shellColor(shellId) {
+      const s = SHELLS.find(x => x.id === shellId)
+      return s ? s.color : '#3b82f6'
+    }
+    function baseSizeFor(i) {
+      return CONFIG.SAT_POINT_SIZE * (satData[i].altitude < 450 ? 0.9 : 1.15)
+    }
+
+    // Recolour/resize the point cloud to spotlight the active tranche (rest dimmed).
+    // Runs only on selection/hover changes — never per frame.
+    function applyHighlight(key) {
+      if (!satellitePoints) return
+      const colAttr = satellitePoints.geometry.attributes.color
+      const sizeAttr = satellitePoints.geometry.attributes.size
+      const g = key ? launchGroupMap.get(key) : null
+      const set = g ? g._set : null
+      const tmp = new THREE.Color()
+
+      for (let i = 0; i < satData.length; i++) {
+        tmp.set(satData[i].color)
+        if (!set) {                                   // no selection → base look
+          colAttr.setXYZ(i, tmp.r, tmp.g, tmp.b)
+          sizeAttr.setX(i, baseSizeFor(i))
+        } else if (set.has(i)) {                      // tranche member → bright + bigger
+          colAttr.setXYZ(i, Math.min(1, tmp.r * 0.5 + 0.55), Math.min(1, tmp.g * 0.5 + 0.6), Math.min(1, tmp.b * 0.5 + 0.6))
+          sizeAttr.setX(i, baseSizeFor(i) * 2.6)
+        } else {                                      // everyone else → dimmed
+          colAttr.setXYZ(i, tmp.r * 0.16, tmp.g * 0.16, tmp.b * 0.20)
+          sizeAttr.setX(i, baseSizeFor(i) * 0.65)
+        }
+      }
+      colAttr.needsUpdate = true
+      sizeAttr.needsUpdate = true
+    }
+
+    // Orbit track of a representative tranche member — shows where the chain runs.
+    function drawTrancheOrbit(key) {
+      clearTrancheOrbit()
+      const g = key ? launchGroupMap.get(key) : null
+      if (!g || !g.indices.length) return
+      const sat = satData[g.indices[Math.floor(g.indices.length / 2)]]
+      if (!sat || !sat.satrec || !shellVisibility[sat.shellId]) return
 
       const periodMin = (sat.period && sat.period > 0) ? sat.period : 95
       const steps = 160
       const baseMs = simTime.getTime()
       const points = []
-
       for (let i = 0; i <= steps; i++) {
         const t = new Date(baseMs + (i / steps) * periodMin * 60000)
         const p = window.satellite.propagate(sat.satrec, t)
         if (!p || !p.position) continue
         const gd = window.satellite.eciToGeodetic(p.position, window.satellite.gstime(t))
         const r = (CONFIG.EARTH_RADIUS + (gd.height || sat.altitude)) * CONFIG.SCALE
-        const latRad = gd.latitude
-        const lonRad = -gd.longitude
         points.push(new THREE.Vector3(
-          r * Math.cos(latRad) * Math.cos(lonRad),
-          r * Math.sin(latRad),
-          r * Math.cos(latRad) * Math.sin(lonRad)
+          r * Math.cos(gd.latitude) * Math.cos(-gd.longitude),
+          r * Math.sin(gd.latitude),
+          r * Math.cos(gd.latitude) * Math.sin(-gd.longitude)
         ))
       }
       if (points.length < 2) return
-
       const geo = new THREE.BufferGeometry().setFromPoints(points)
-      const mat = new THREE.LineBasicMaterial({ color: sat.color, transparent: true, opacity: 0.9 })
+      const mat = new THREE.LineBasicMaterial({ color: shellColor(g.shellId), transparent: true, opacity: 0.55 })
       selectedOrbitLine = new THREE.Line(geo, mat)
       orbitLinesGroup.add(selectedOrbitLine)
     }
-
-    function clearSelectedOrbit() {
+    function clearTrancheOrbit() {
       if (selectedOrbitLine) {
         orbitLinesGroup.remove(selectedOrbitLine)
         selectedOrbitLine.geometry.dispose()
@@ -1380,89 +1446,152 @@
       }
     }
 
-    // Briefly swap a control button's label to hint at what to do.
-    function flashButtonHint(btn, msg) {
-      const span = btn && btn.querySelector('span')
-      if (!span) return
-      const orig = span.dataset.orig || span.textContent
-      span.dataset.orig = orig
-      span.textContent = msg
-      clearTimeout(span._hintTimer)
-      span._hintTimer = setTimeout(() => { span.textContent = orig }, 1700)
-    }
-
-    function toggleOrbits() {
-      showOrbits = !showOrbits
-      const btn = document.getElementById('toggle-orbits-btn')
-      btn.classList.toggle('!bg-blue-600', showOrbits)
-      btn.classList.toggle('!border-blue-500', showOrbits)
-      btn.classList.toggle('text-white', showOrbits)
-
-      if (showOrbits) {
-        if (selectedSatIndex < 0) flashButtonHint(btn, 'Satellit wählen')
-        else drawSelectedOrbit()
-      } else {
-        clearSelectedOrbit()
-      }
-    }
-
-    function toggleLabels() {
-      showLabels = !showLabels
-      const btn = document.getElementById('toggle-labels-btn')
-      btn.classList.toggle('!bg-blue-600', showLabels)
-      btn.classList.toggle('!border-blue-500', showLabels)
-      btn.classList.toggle('text-white', showLabels)
-
-      if (showLabels) {
-        if (selectedSatIndex < 0) flashButtonHint(btn, 'Satellit wählen')
-      } else if (selectedLabelEl) {
-        selectedLabelEl.style.display = 'none'
-      }
-    }
-
-    // Single name label that follows the selected satellite. One DOM node, updated
-    // each frame — no scanning, no pause hacks, so it never interferes with zoom/drag.
-    function updateSelectedLabel() {
-      if (!showLabels || selectedSatIndex < 0 || !satellitePoints) {
-        if (selectedLabelEl) selectedLabelEl.style.display = 'none'
-        return
-      }
-      const sat = satData[selectedSatIndex]
-      if (!sat) return
-
-      const posAttr = satellitePoints.geometry.attributes.position
-      const satPos = new THREE.Vector3(
-        posAttr.getX(selectedSatIndex),
-        posAttr.getY(selectedSatIndex),
-        posAttr.getZ(selectedSatIndex)
-      )
-
+    // Name labels for the active tranche's front-facing members (bounded → cheap, no jank).
+    function updateTrancheLabels() {
       const overlay = window._starlinkLabelOverlay
       if (!overlay) return
-      if (!selectedLabelEl) {
-        selectedLabelEl = document.createElement('div')
-        selectedLabelEl.className = 'sat-label absolute text-blue-200 pointer-events-none'
-        overlay.appendChild(selectedLabelEl)
-      }
-      selectedLabelEl.textContent = sat.name
+      if (!window._trancheLabels) window._trancheLabels = new Map()
+      const cache = window._trancheLabels
 
-      // Hide when the satellite is on the far side of the globe
-      const onFar = satPos.clone().normalize().dot(camera.position.clone().normalize()) < 0.1
-      if (onFar) { selectedLabelEl.style.display = 'none'; return }
+      const key = previewTrancheKey || selectedTrancheKey
+      const g = key ? launchGroupMap.get(key) : null
+      if (!g || !satellitePoints) { clearTrancheLabels(); return }
 
+      const posAttr = satellitePoints.geometry.attributes.position
       const canvas = document.getElementById('three-canvas')
       const rect = canvas.getBoundingClientRect()
-      const v = satPos.clone().project(camera)
-      selectedLabelEl.style.display = ''
-      selectedLabelEl.style.left = `${(v.x * 0.5 + 0.5) * rect.width + 9}px`
-      selectedLabelEl.style.top = `${(-v.y * 0.5 + 0.5) * rect.height - 4}px`
+      const camDir = camera.position.clone().normalize()
+
+      const desired = []
+      for (const i of g.indices) {
+        if (!shellVisibility[satData[i].shellId]) continue
+        const x = posAttr.getX(i), y = posAttr.getY(i), z = posAttr.getZ(i)
+        if (y < -100) continue
+        const p = new THREE.Vector3(x, y, z)
+        if (p.clone().normalize().dot(camDir) < 0.12) continue   // far side of globe
+        const v = p.project(camera)
+        const px = (v.x * 0.5 + 0.5) * rect.width
+        const py = (-v.y * 0.5 + 0.5) * rect.height
+        if (px < 28 || px > rect.width - 28 || py < 18 || py > rect.height - 18) continue
+        desired.push({ i, px, py })
+        if (desired.length >= 18) break
+      }
+
+      for (const [i, el] of Array.from(cache.entries())) {
+        if (!desired.find(d => d.i === i)) { el.remove(); cache.delete(i) }
+      }
+      for (const { i, px, py } of desired) {
+        let el = cache.get(i)
+        if (!el) {
+          el = document.createElement('div')
+          el.className = 'sat-label absolute text-blue-100 pointer-events-none'
+          el.textContent = satData[i].name.replace('STARLINK-', 'SL-')
+          overlay.appendChild(el)
+          cache.set(i, el)
+        }
+        el.style.left = `${px + 8}px`
+        el.style.top = `${py - 4}px`
+      }
+    }
+    function clearTrancheLabels() {
+      if (window._trancheLabels) {
+        for (const el of window._trancheLabels.values()) el.remove()
+        window._trancheLabels.clear()
+      }
+    }
+
+    // ---- selection / hover-preview ----
+    function selectTranche(key) {
+      selectedTrancheKey = key
+      previewTrancheKey = null
+      applyHighlight(key)
+      drawTrancheOrbit(key)
+      renderTrancheDetail()
+      markActiveRow()
+    }
+    function previewTranche(key) {
+      previewTrancheKey = key
+      const active = key || selectedTrancheKey
+      applyHighlight(active)
+      drawTrancheOrbit(active)
+    }
+    function clearTranche() {
+      selectedTrancheKey = null
+      previewTrancheKey = null
+      applyHighlight(null)
+      clearTrancheOrbit()
+      clearTrancheLabels()
+      renderTrancheDetail()
+      markActiveRow()
+    }
+
+    function renderTrancheDetail() {
+      const el = document.getElementById('tranche-detail')
+      if (!el) return
+      const g = selectedTrancheKey ? launchGroupMap.get(selectedTrancheKey) : null
+      if (!g) {
+        el.innerHTML = `<div class="hud-panel rounded-xl p-4 border border-slate-700/50 text-xs text-slate-500 text-center">
+          Start-Tranche aus der Liste wählen<br>oder einen Satelliten im Globus anklicken.
+        </div>`
+        return
+      }
+      const col = shellColor(g.shellId)
+      el.innerHTML = `
+        <div class="hud-panel p-4 rounded-xl border border-blue-500/30">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="font-mono text-lg font-semibold text-blue-300">${g.label}</div>
+              <div class="text-xs text-slate-400 mt-px">Internationaler Designator</div>
+            </div>
+            <div class="px-2 py-px text-xs rounded font-medium" style="background:${col}22;color:${col}">${g.shellId.toUpperCase()}</div>
+          </div>
+          <div class="grid grid-cols-3 gap-x-2 mt-4 text-sm">
+            <div><div class="text-[10px] text-slate-400">Satelliten</div><div class="font-semibold tabular-nums">${g.count}</div></div>
+            <div><div class="text-[10px] text-slate-400">Ø Höhe</div><div class="font-semibold tabular-nums">${Math.round(g.avgAlt)} km</div></div>
+            <div><div class="text-[10px] text-slate-400">Startjahr</div><div class="font-semibold tabular-nums">${g.year || '—'}</div></div>
+          </div>
+          <button onclick="clearTranche()" class="mt-3 text-[10px] text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1">
+            <i class="fa-solid fa-times text-xs"></i> <span>Auswahl aufheben</span>
+          </button>
+        </div>`
+    }
+
+    function renderTrancheList() {
+      const c = document.getElementById('tranche-list')
+      if (!c) return
+      c.innerHTML = ''
+      launchGroups.forEach(g => {
+        const row = document.createElement('div')
+        row.dataset.key = g.key
+        row.className = 'tranche-row data-row flex items-center justify-between gap-2 py-1 px-2 rounded cursor-pointer hover:bg-slate-800/50'
+        row.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2 h-2 rounded-full shrink-0" style="background:${shellColor(g.shellId)}"></span>
+            <span class="text-slate-200 truncate">${g.label}</span>
+          </div>
+          <span class="px-2 py-px text-[10px] rounded bg-slate-800 text-slate-300 tabular-nums shrink-0">${g.count}</span>`
+        row.onmouseenter = () => previewTranche(g.key)
+        row.onmouseleave = () => previewTranche(null)
+        row.onclick = () => selectTranche(g.key)
+        c.appendChild(row)
+      })
+      markActiveRow()
+    }
+    function markActiveRow() {
+      document.querySelectorAll('.tranche-row').forEach(r => {
+        const on = r.dataset.key === selectedTrancheKey
+        r.classList.toggle('bg-blue-500/15', on)
+      })
     }
 
     // ============================================
     // INTERACTION
     // ============================================
+    let dragMoved = false   // distinguishes a rotate-drag from a genuine click
+
     function onMouseDown(e) {
       isDragging = true
+      dragMoved = false
       previousMouseX = e.clientX
       previousMouseY = e.clientY
     }
@@ -1473,19 +1602,20 @@
 
     function onMouseMove(e) {
       if (!isDragging) return
-      
+
       const deltaX = e.clientX - previousMouseX
       const deltaY = e.clientY - previousMouseY
-      
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 3) dragMoved = true
+
       cameraAzimuth -= deltaX * 0.0038
       cameraElevation += deltaY * 0.0035   // flipped: mouse up now rotates Earth up (direct manipulation feel)
-      
+
       // Clamp elevation
       cameraElevation = Math.max(-1.45, Math.min(1.45, cameraElevation))
-      
+
       previousMouseX = e.clientX
       previousMouseY = e.clientY
-      
+
       updateCameraPosition()
     }
 
@@ -1525,141 +1655,46 @@
       animateZoom(cameraDistance * (dir < 0 ? 0.80 : 1.25))
     }
 
+    // Click a satellite → select ITS launch tranche (not a single sat).
+    // Ignored if the gesture was actually a rotate-drag.
     function onCanvasClick(e) {
+      if (dragMoved) return
+      if (!satellitePoints) return
+
       const canvas = document.getElementById('three-canvas')
       const rect = canvas.getBoundingClientRect()
-      
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      const mx = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const my = -((e.clientY - rect.top) / rect.height) * 2 + 1
 
-      raycaster.setFromCamera(mouse, camera)
-      
-      if (!satellitePoints) return
-      
-      // Raycast against points is tricky. Use manual distance check
       const posAttr = satellitePoints.geometry.attributes.position
-      const threshold = 0.35
-      
+      const threshold = 0.04   // NDC pick radius (tight)
+      const camDir = camera.position.clone().normalize()
+
       let closestIdx = -1
-      let closestDist = Infinity
-      
+      let closestScreen = Infinity
+      const v = new THREE.Vector3()
+
       for (let i = 0; i < satData.length; i++) {
         if (!shellVisibility[satData[i].shellId]) continue
-        
-        const px = posAttr.getX(i)
-        const py = posAttr.getY(i)
-        const pz = posAttr.getZ(i)
-        
-        const dist = Math.hypot(
-          px - camera.position.x,
-          py - camera.position.y,
-          pz - camera.position.z
-        )
-        
-        // Project to NDC roughly
-        const vec = new THREE.Vector3(px, py, pz)
-        vec.project(camera)
-        
-        const dx = vec.x - mouse.x
-        const dy = vec.y - mouse.y
-        const screenDist = Math.hypot(dx, dy)
-        
-        if (screenDist < threshold && dist < closestDist) {
-          closestDist = dist
+        const px = posAttr.getX(i), py = posAttr.getY(i), pz = posAttr.getZ(i)
+        if (py < -100) continue
+        v.set(px, py, pz)
+        if (v.clone().normalize().dot(camDir) < 0.1) continue   // skip far side (occluded)
+        v.project(camera)
+        const screenDist = Math.hypot(v.x - mx, v.y - my)
+        if (screenDist < threshold && screenDist < closestScreen) {
+          closestScreen = screenDist
           closestIdx = i
         }
       }
-      
+
       if (closestIdx >= 0) {
-        selectSatellite(closestIdx)
+        const key = satData[closestIdx].launchKey || 'unbek'
+        selectTranche(key)
+        // scroll the list to the chosen tranche
+        const row = document.querySelector(`.tranche-row[data-key="${key}"]`)
+        if (row) row.scrollIntoView({ block: 'nearest' })
       }
-    }
-
-    function selectSatellite(index) {
-      selectedSatIndex = index
-      const sat = satData[index]
-      if (!sat) return
-
-      const esc = (str) => String(str).replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-
-      const inc = sat.inclination.toFixed(1)
-      const vel = (sat.velocity || 0).toFixed(2)
-      const period = (sat.period || 0).toFixed(1)
-
-      // Live sub-satellite point (geodetic) at the current simulation time
-      let liveAlt = Math.round(sat.altitude)
-      let subPoint = '—'
-      try {
-        const p = window.satellite.propagate(sat.satrec, simTime)
-        if (p && p.position) {
-          const gd = window.satellite.eciToGeodetic(p.position, window.satellite.gstime(simTime))
-          liveAlt = Math.round(gd.height)
-          subPoint = `${(gd.latitude * 180 / Math.PI).toFixed(1)}°, ${(gd.longitude * 180 / Math.PI).toFixed(1)}°`
-        }
-      } catch (e) { /* keep mean values */ }
-
-      const panel = document.getElementById('selected-sat-panel')
-      panel.innerHTML = `
-        <div class="hud-panel p-4 rounded-xl border border-blue-500/30">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="font-mono text-lg tracking-tight font-semibold text-blue-300">${esc(sat.name)}</div>
-              <div class="text-xs text-slate-400 mt-px">NORAD-ID • ${esc(sat.noradId)}</div>
-            </div>
-            <div class="px-2 py-px text-xs rounded bg-blue-500/10 text-blue-400 font-medium">${esc(sat.shellId.toUpperCase())}</div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-x-2 mt-4 text-sm">
-            <div>
-              <div class="text-[10px] text-slate-400">Höhe</div>
-              <div class="font-semibold tabular-nums">${liveAlt} <span class="text-xs font-normal">km</span></div>
-            </div>
-            <div>
-              <div class="text-[10px] text-slate-400">Inklination</div>
-              <div class="font-semibold tabular-nums">${inc}°</div>
-            </div>
-            <div>
-              <div class="text-[10px] text-slate-400">Geschw.</div>
-              <div class="font-semibold tabular-nums">${vel} <span class="text-xs font-normal">km/s</span></div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-x-2 mt-3 text-sm">
-            <div>
-              <div class="text-[10px] text-slate-400">Umlaufzeit</div>
-              <div class="font-semibold tabular-nums">${period} min</div>
-            </div>
-            <div>
-              <div class="text-[10px] text-slate-400">Position (lat, lon)</div>
-              <div class="font-semibold tabular-nums">${subPoint}</div>
-            </div>
-          </div>
-
-          <button onclick="deselectSatellite()"
-                  class="mt-3 text-[10px] text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1">
-            <i class="fa-solid fa-times text-xs"></i> <span>Abwählen</span>
-          </button>
-        </div>
-      `
-
-      // Reflect the selection in the optional orbit/label overlays
-      if (showOrbits) drawSelectedOrbit()
-      // (the name label updates itself each frame via updateSelectedLabel)
-    }
-
-    function deselectSatellite() {
-      selectedSatIndex = -1
-      clearSelectedOrbit()
-      if (selectedLabelEl) selectedLabelEl.style.display = 'none'
-      document.getElementById('selected-sat-panel').innerHTML = `
-        <div class="hud-panel h-[128px] rounded-xl flex flex-col items-center justify-center border border-slate-700/50">
-          <i class="fa-solid fa-satellite text-slate-700 text-3xl mb-2"></i>
-          <div class="text-xs text-slate-500 text-center">
-            Klicken Sie einen Satelliten<br>im Globus an
-          </div>
-        </div>
-      `
     }
 
     function onResize() {
@@ -1778,7 +1813,8 @@
         cb.addEventListener('change', () => {
           shellVisibility[shell.id] = cb.checked
           updateSatellitePositions()
-          if (showOrbits) drawSelectedOrbit()
+          const active = previewTrancheKey || selectedTrancheKey
+          if (active) { applyHighlight(active); drawTrancheOrbit(active) }
         })
       })
     }
@@ -1831,14 +1867,15 @@
       // Update sim time display while time is advancing
       if (timeMultiplier > 0) updateSimTimeDisplay()
 
-      // Selected-satellite name label (single element, follows the sat every frame)
-      if (showLabels) updateSelectedLabel()
+      // Name labels for the active tranche's members (chain of pearls), every frame
+      const _activeTranche = previewTrancheKey || selectedTrancheKey
+      if (_activeTranche) updateTrancheLabels()
 
-      // Keep the selected satellite's orbit track current as simulation time advances
-      if (showOrbits && selectedSatIndex >= 0 && timeMultiplier > 0) {
+      // Keep the tranche's orbit track current as simulation time advances
+      if (_activeTranche && timeMultiplier > 0) {
         const now = Date.now()
         if (!window._lastOrbitRedraw || now - window._lastOrbitRedraw > 2500) {
-          drawSelectedOrbit()
+          drawTrancheOrbit(_activeTranche)
           window._lastOrbitRedraw = now
         }
       }
@@ -2018,8 +2055,8 @@
       // Boot clock
       updateUTCClock()
       
-      // Default time speed
-      setTimeMultiplier(1)
+      // Default time speed — 10× so the tranche chains visibly drift across the globe
+      setTimeMultiplier(10)
       
       // Load real satellite data (cache → live Celestrak → committed snapshot)
       await loadStarlinkData()
@@ -2033,7 +2070,7 @@
 
       // Start animation
       animate()
-      
+
       // Slight initial camera animation feel
       setTimeout(() => {
         if (cameraDistance > 21) {
@@ -2041,15 +2078,7 @@
           updateCameraPosition()
         }
       }, 800)
-      
-      // Demo: select one satellite after 4.2 seconds (nice UX)
-      setTimeout(() => {
-        if (satData.length > 0 && selectedSatIndex === -1) {
-          const idx = Math.floor(satData.length * 0.31)
-          selectSatellite(idx % satData.length)
-        }
-      }, 4200)
-      
+
       // Final status
       console.log('%c[Starlink Control] Dashboard ready — real TLE constellation, SGP4 propagation.', 'color:#334466')
     }
