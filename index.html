@@ -56,10 +56,6 @@
       transition: all 0.1s ease;
     }
 
-    .telemetry-log {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 11px;
-    }
 
     .satellite-point {
       pointer-events: none;
@@ -225,28 +221,27 @@
         </div>
         <div id="const-subtitle" class="text-[10px] text-slate-500 -mt-1 mb-2">Lade TLE-Daten…</div>
 
-        <div class="space-y-4">
-          <!-- Total Satellites (real, from TLE) -->
-          <div>
-            <div class="flex justify-between items-baseline mb-1">
-              <div class="text-xs text-slate-400">Getrackte Satelliten</div>
-              <div id="total-sats" class="font-display text-3xl font-semibold tabular-nums tracking-tighter">—</div>
-            </div>
-            <div class="text-[10px] text-slate-500">aus aktuellen TLE-Bahnelementen</div>
+        <div class="space-y-3">
+          <!-- Headline total -->
+          <div class="flex justify-between items-baseline">
+            <div class="text-xs text-slate-400">Getrackte Satelliten</div>
+            <div id="total-sats" class="font-display text-3xl font-semibold tabular-nums tracking-tighter">—</div>
           </div>
 
-          <!-- Quick Stats Grid (computed from TLE) -->
-          <div class="grid grid-cols-2 gap-2">
-            <div class="metric-card rounded-lg p-3">
-              <div class="text-[10px] text-slate-500">Ø Höhe</div>
-              <div id="avg-alt" class="font-display text-2xl font-semibold tabular-nums">—</div>
-              <div class="text-slate-500 text-[10px] mt-0.5">km über Grund</div>
+          <!-- Compact stat list (all from TLE) -->
+          <div class="space-y-1 text-xs">
+            <div class="flex justify-between"><span class="text-slate-400">Ø Höhe</span><span id="stat-alt" class="font-medium tabular-nums">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Höhen-Spanne</span><span id="stat-alt-range" class="font-medium tabular-nums">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Ø Umlaufzeit</span><span id="stat-period" class="font-medium tabular-nums">—</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Ø Geschwindigkeit</span><span id="stat-vel" class="font-medium tabular-nums">—</span></div>
+          </div>
+
+          <!-- Growth chart -->
+          <div class="pt-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[10px] text-slate-500">Flotte nach Startjahr (kumuliert)</span>
             </div>
-            <div class="metric-card rounded-lg p-3">
-              <div class="text-[10px] text-slate-500">Ø Umlaufzeit</div>
-              <div id="avg-period" class="font-display text-2xl font-semibold tabular-nums">—</div>
-              <div class="text-slate-500 text-[10px] mt-0.5">Minuten</div>
-            </div>
+            <div id="growth-chart" class="text-[10px] text-slate-500"></div>
           </div>
         </div>
       </div>
@@ -257,10 +252,6 @@
 
         <div class="space-y-3 text-sm" id="shells-container">
           <!-- Populated by JS -->
-        </div>
-
-        <div class="mt-4 pt-4 border-t border-slate-800 text-[10px] text-slate-500 leading-relaxed">
-          Schalen-Zuordnung approximiert aus Inklination &amp; Bahnhöhe der TLE.
         </div>
       </div>
 
@@ -355,7 +346,7 @@
       <div class="flex-1 flex flex-col p-5 min-h-0 border-b border-slate-800">
         <div class="flex items-center justify-between mb-2">
           <div class="section-title">START-TRANCHEN</div>
-          <div class="text-slate-500 text-[10px]">neueste zuerst • Hover = Kette</div>
+          <div class="text-slate-500 text-[10px]">Hover = Kette · Esc = zurück</div>
         </div>
         <div id="tranche-list"
              class="flex-1 overflow-auto pr-1 text-sm space-y-0.5">
@@ -374,26 +365,8 @@
         </div>
       </div>
 
-      <!-- Bottom right stats -->
-      <div class="p-5 border-t border-slate-800 bg-[#080a0e]">
-        <div class="grid grid-cols-3 gap-2 text-center text-xs">
-          <div>
-            <div class="text-slate-500">Ø Umlaufzeit</div>
-            <div id="stat-period" class="font-semibold tabular-nums">—</div>
-          </div>
-          <div>
-            <div class="text-slate-500">Ø v</div>
-            <div id="stat-vel" class="font-semibold tabular-nums">—</div>
-          </div>
-          <div>
-            <div class="text-slate-500">Getrackt</div>
-            <div id="stat-count" class="font-semibold tabular-nums">—</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="px-5 pb-4 text-[10px] text-center text-slate-500">
-        Daten: <span class="text-emerald-400">Celestrak TLE</span> · SGP4-Propagation (satellite.js)
+      <div class="px-5 py-4 border-t border-slate-800 bg-[#080a0e] text-[10px] text-center text-slate-500">
+        Daten: <span class="text-emerald-400">Celestrak TLE</span> · SGP4 (satellite.js) · Starts: The Space Devs
       </div>
     </div>
   </div>
@@ -444,8 +417,8 @@
     const TLE_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000 // re-fetch live at most every 12h (Celestrak updates ~2h)
 
     // Upcoming launches — The Space Devs / Launch Library 2 (CORS-enabled, free, rate-limited)
-    const LAUNCH_API_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search=Starlink&limit=5&ordering=net&mode=list'
-    const LAUNCH_CACHE_KEY = 'starlink_launches_v1'
+    const LAUNCH_API_URL = 'https://ll.thespacedevs.com/2.3.0/launches/upcoming/?search=Starlink&limit=5&ordering=net&mode=normal'
+    const LAUNCH_CACHE_KEY = 'starlink_launches_v2'   // v2: includes launch pad
     const LAUNCH_CACHE_MAX_AGE_MS = 2 * 60 * 60 * 1000  // 2h — the free tier is ~15 requests/hour
 
     let scene, camera, renderer
@@ -495,12 +468,6 @@
     // ============================================
     // UTILITIES
     // ============================================
-    function formatNumber(n) {
-      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M'
-      if (n >= 10000) return Math.floor(n / 1000) + 'k'
-      return n.toLocaleString('de-DE')
-    }
-
     function updateUTCClock() {
       const clock = document.getElementById('utc-clock')
       setInterval(() => {
@@ -557,29 +524,6 @@
       if (lbl) lbl.textContent = paused ? 'ANGEHALTEN' : (realtime ? 'ECHTZEIT' : 'ZEITRAFFER')
     }
 
-    function addTelemetry(message, type = 'normal') {
-      const log = document.getElementById('telemetry-log')
-      if (!log) return   // telemetry panel was replaced by cities list — safe no-op
-
-      const line = document.createElement('div')
-      
-      const time = simTime.toTimeString().substr(0, 8)
-      let color = 'text-emerald-300/90'
-      if (type === 'warning') color = 'text-amber-400'
-      if (type === 'event') color = 'text-sky-400'
-      
-      line.innerHTML = `<span class="text-emerald-500/60">${time}</span> ${message}`
-      line.className = color
-      
-      log.appendChild(line)
-      
-      // Keep only last 18 entries
-      while (log.children.length > 18) {
-        log.removeChild(log.firstChild)
-      }
-      
-      log.scrollTop = log.scrollHeight
-    }
 
     // ============================================
     // THREE.JS INITIALIZATION
@@ -641,11 +585,12 @@
       canvas.addEventListener('click', onCanvasClick)
       window.addEventListener('resize', onResize)
 
-      // Keyboard zoom: +/= zoom in, -/_ zoom out
+      // Keyboard: +/= zoom in, -/_ zoom out, Esc clears the tranche selection
       window.addEventListener('keydown', (e) => {
         if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return
         if (e.key === '+' || e.key === '=') { zoomBy(-1); e.preventDefault() }
         else if (e.key === '-' || e.key === '_') { zoomBy(1); e.preventDefault() }
+        else if (e.key === 'Escape') { if (selectedTrancheKey) { clearTranche(); e.preventDefault() } }
       })
       
       // Permanent label overlay container.
@@ -985,7 +930,6 @@
           scene.add(backLines)
         }
 
-        addTelemetry('Kontinent-Outlines (Natural Earth) geladen', 'event')
       } catch (err) {
         // Silent graceful fallback — app works 100% without outlines
         console.warn('[Starlink] Continent outlines not available (offline / file:// / CORS):', err.message || err)
@@ -1046,8 +990,6 @@
         const lines = new THREE.LineSegments(bufGeo, mat)
         scene.add(lines)
         countryBorders = lines
-
-        addTelemetry('Ländergrenzen geladen', 'event')
       } catch (err) {
         console.warn('[Starlink] Country borders not available:', err.message || err)
       }
@@ -1611,7 +1553,7 @@
           <span class="px-2 py-px text-[10px] rounded bg-slate-800 text-slate-300 tabular-nums shrink-0">${g.count}</span>`
         row.onmouseenter = () => previewTranche(g.key)
         row.onmouseleave = () => previewTranche(null)
-        row.onclick = () => selectTranche(g.key)
+        row.onclick = () => { selectedTrancheKey === g.key ? clearTranche() : selectTranche(g.key) }
         c.appendChild(row)
       })
       markActiveRow()
@@ -1729,10 +1671,13 @@
 
       if (closestIdx >= 0) {
         const key = satData[closestIdx].launchKey || 'unbek'
+        if (key === selectedTrancheKey) { clearTranche(); return }   // click same → toggle off
         selectTranche(key)
         // scroll the list to the chosen tranche
         const row = document.querySelector(`.tranche-row[data-key="${key}"]`)
         if (row) row.scrollIntoView({ block: 'nearest' })
+      } else if (selectedTrancheKey) {
+        clearTranche()   // clicked empty space → back to the full constellation
       }
     }
 
@@ -1767,12 +1712,19 @@
       const counts = {}
       SHELLS.forEach(s => counts[s.id] = 0)
       let sumAlt = 0, sumPeriod = 0, sumVel = 0, n = 0
+      let minAlt = Infinity, maxAlt = -Infinity, maxVel = 0
+      const byYear = {}   // launchYear → currently-tracked sat count
 
       for (const s of satData) {
         counts[s.shellId] = (counts[s.shellId] || 0) + 1
-        if (isFinite(s.altitude)) { sumAlt += s.altitude; n++ }
+        if (isFinite(s.altitude)) {
+          sumAlt += s.altitude; n++
+          if (s.altitude < minAlt) minAlt = s.altitude
+          if (s.altitude > maxAlt) maxAlt = s.altitude
+        }
         if (isFinite(s.period)) sumPeriod += s.period
-        if (isFinite(s.velocity)) sumVel += s.velocity
+        if (isFinite(s.velocity)) { sumVel += s.velocity; if (s.velocity > maxVel) maxVel = s.velocity }
+        if (s.launchYear) byYear[s.launchYear] = (byYear[s.launchYear] || 0) + 1
       }
 
       const total = satData.length
@@ -1781,7 +1733,11 @@
         total,
         avgAlt: n ? sumAlt / n : 0,
         avgPeriod: total ? sumPeriod / total : 0,
-        avgVel: total ? sumVel / total : 0
+        avgVel: total ? sumVel / total : 0,
+        minAlt: isFinite(minAlt) ? minAlt : 0,
+        maxAlt: isFinite(maxAlt) ? maxAlt : 0,
+        maxVel,
+        byYear
       }
       return constStats
     }
@@ -1791,11 +1747,47 @@
       setText('total-sats', s.total.toLocaleString('de-DE'))
       const launchTxt = launchGroups.length ? ` · ${launchGroups.length} Starts` : ''
       setText('const-subtitle', `${s.total.toLocaleString('de-DE')} Satelliten${launchTxt} · ${SHELLS.length} Schalen`)
-      setText('avg-alt', Math.round(s.avgAlt).toLocaleString('de-DE'))
-      setText('avg-period', s.avgPeriod.toFixed(1))
+      setText('stat-alt', Math.round(s.avgAlt) + ' km')
+      setText('stat-alt-range', `${Math.round(s.minAlt)}–${Math.round(s.maxAlt)} km`)
       setText('stat-period', s.avgPeriod.toFixed(1) + ' min')
       setText('stat-vel', s.avgVel.toFixed(2) + ' km/s')
-      setText('stat-count', s.total.toLocaleString('de-DE'))
+      drawGrowthChart()
+    }
+
+    // Mini cumulative area chart: how much of today's fleet was launched up to each year.
+    function drawGrowthChart() {
+      const host = document.getElementById('growth-chart')
+      if (!host) return
+      const years = Object.keys(constStats.byYear || {}).map(Number).filter(y => y > 2000).sort((a, b) => a - b)
+      if (!years.length) { host.innerHTML = ''; return }
+
+      const y0 = years[0], y1 = years[years.length - 1]
+      const series = []
+      let cum = 0
+      for (let y = y0; y <= y1; y++) { cum += (constStats.byYear[y] || 0); series.push(cum) }
+      const maxCum = series[series.length - 1] || 1
+
+      const W = 232, H = 60, base = H - 12
+      const stepX = series.length > 1 ? W / (series.length - 1) : 0
+      const px = i => (i * stepX)
+      const py = v => base - (v / maxCum) * (base - 4)
+
+      let line = ''
+      series.forEach((v, i) => { line += (i ? 'L' : 'M') + px(i).toFixed(1) + ' ' + py(v).toFixed(1) + ' ' })
+      const area = `M0 ${base} ` + series.map((v, i) => 'L' + px(i).toFixed(1) + ' ' + py(v).toFixed(1)).join(' ') + ` L${W} ${base} Z`
+
+      host.innerHTML = `
+        <svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" preserveAspectRatio="none" style="display:block">
+          <defs><linearGradient id="gw" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#3b82f6" stop-opacity="0.45"/>
+            <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+          </linearGradient></defs>
+          <path d="${area}" fill="url(#gw)"/>
+          <path d="${line}" fill="none" stroke="#60a5fa" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          <text x="1" y="${H - 1}" fill="#64748b" font-size="9">${y0}</text>
+          <text x="${W - 1}" y="${H - 1}" fill="#64748b" font-size="9" text-anchor="end">${y1}</text>
+        </svg>
+        <div class="mt-0.5 tabular-nums">${maxCum.toLocaleString('de-DE')} Sats · ${y0}–${y1}</div>`
     }
 
     // Honest source/freshness indicator — where the TLE came from and how old it is.
@@ -2091,7 +2083,8 @@
           const data = (j.results || []).map(r => ({
             name: r.name || '',
             net: r.net || '',
-            status: (r.status && r.status.abbrev) || ''
+            status: (r.status && r.status.abbrev) || '',
+            pad: (r.pad && ((r.pad.location && r.pad.location.name) || r.pad.name)) || ''
           }))
           if (data.length) {
             try { localStorage.setItem(LAUNCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), data })) } catch (e) {}
@@ -2105,6 +2098,17 @@
       }
     }
 
+    // Launch site → orbital-shell tendency. Florida pads fly the 53° shells;
+    // Vandenberg (West Coast) flies the high-inclination / polar shells. Physically
+    // determined by range safety, so this is a reliable real indicator.
+    function launchSiteInfo(pad) {
+      const p = (pad || '').toLowerCase()
+      if (/vandenberg/.test(p)) return { site: 'Vandenberg', shell: 'hohe Inkl. / polar', col: '#22d3ee' }
+      if (/kennedy/.test(p))    return { site: 'Kennedy LC-39A', shell: '≈53° Schale', col: '#3b82f6' }
+      if (/canaveral|florida|cape/.test(p)) return { site: 'Cape Canaveral', shell: '≈53° Schale', col: '#3b82f6' }
+      return { site: (pad || '').split(',')[0] || '—', shell: '', col: '#64748b' }
+    }
+
     function renderLaunches(data) {
       const c = document.getElementById('launches-list')
       if (!c) return
@@ -2115,13 +2119,14 @@
       const now = Date.now()
       c.innerHTML = ''
       data.forEach(l => {
-        const mission = escHtml((l.name.split('|').pop() || l.name).trim())   // "Starlink Group 10-53"
+        // Mission group, e.g. "Group 10-53"
+        const group = escHtml((l.name.split('|').pop() || l.name).trim().replace(/^Starlink\s+/i, ''))
         const t = l.net ? new Date(l.net) : null
         let when = '—', rel = ''
         if (t && isFinite(t.getTime())) {
-          when = t.toISOString().replace('T', ' ').substr(0, 16) + 'Z'
+          when = t.toISOString().slice(5, 10).replace('-', '.') + '.'   // "MM.DD." → "05.30."
           const dh = (t.getTime() - now) / 3600000
-          if (dh < 0) rel = 'läuft / erfolgt'
+          if (dh < 0) rel = 'aktuell'
           else if (dh < 1) rel = `in ${Math.max(1, Math.round(dh * 60))} Min`
           else if (dh < 48) rel = `in ${Math.round(dh)} Std`
           else rel = `in ${Math.round(dh / 24)} Tg`
@@ -2130,14 +2135,23 @@
         const stClass = /^go/i.test(st) ? 'bg-emerald-500/15 text-emerald-400'
           : /tb[cd]/i.test(st) ? 'bg-amber-500/15 text-amber-400'
           : 'bg-slate-700 text-slate-300'
+        const si = launchSiteInfo(l.pad)
+
+        // Lead with the meaningful shell hint; fall back to the group designation.
+        const headline = si.shell ? `<span style="color:${si.col}">${si.shell}</span>` : group
+        const subParts = []
+        if (si.shell) subParts.push(group)
+        if (si.site && si.site !== '—') subParts.push(escHtml(si.site))
+        if (rel) subParts.push(rel)
+
         const row = document.createElement('div')
         row.className = 'flex items-start justify-between gap-2'
         row.innerHTML = `
           <div class="min-w-0">
-            <div class="text-slate-200 text-[13px] truncate">${mission}</div>
-            <div class="text-[10px] text-slate-500">${when}${rel ? ' · ' + rel : ''}</div>
+            <div class="text-slate-200 text-[13px] truncate">${headline}</div>
+            <div class="text-[10px] text-slate-500 truncate">${subParts.join(' · ')}</div>
           </div>
-          <span class="px-1.5 py-px text-[10px] rounded shrink-0 ${stClass}">${escHtml(st || '—')}</span>`
+          <span class="px-1.5 py-px text-[10px] rounded shrink-0 ${stClass}" title="${when} (NET)">${escHtml(st || '—')}</span>`
         c.appendChild(row)
       })
     }
@@ -2153,7 +2167,6 @@
       
       // Reset time to near real
       simTime = new Date()
-      addTelemetry('Ansicht & Zeit zurückgesetzt', 'event')
     }
 
     // ============================================

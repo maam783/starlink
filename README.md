@@ -30,8 +30,12 @@ zeigt die App einen ehrlichen Leerzustand statt erfundener Daten.
   (echte Elevationswinkel-Geometrie) für 11 Städte inkl. Hochbreiten wie Oslo &
   Reykjavík — macht den Abdeckungs-Gradient sichtbar (Pol = wenige, Mittelbreiten = viele).
 - **Nächste Starts**: kommende SpaceX/Starlink-Launches live von The Space Devs
-  (Launch Library 2), mit Mission, NET-Zeitpunkt und Status (Go / TBD / In Flight).
-  localStorage-gecacht (2 h) wegen ~15 Requests/h Free-Tier; fällt sauber aus.
+  (Launch Library 2). Zeigt die Schalen-Tendenz (aus dem Startplatz abgeleitet:
+  Florida → ≈53°, Vandenberg → hohe Inkl. / polar), Gruppe, Ort, Countdown und
+  Status (Go / TBD / In Flight). localStorage-gecacht (2 h, Free-Tier ~15 Req/h).
+- **Wachstums-Diagramm**: kumulierte Flottengröße nach Startjahr (aus den
+  Launch-Jahren der aktuell getrackten Sats — frühe Jahre untertreiben, da
+  Gen-1-Sats deorbitiert sind).
 - TLE-Quelle (live / cache / paket) + TLE-Epoche (wie alt die Bahndaten sind)
 
 ## Hosting
