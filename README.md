@@ -57,8 +57,9 @@ Verfügbarkeit/Limits zur Ladezeit. Manuell auslösbar über den **Actions**-Tab
 
 - Tailwind & Font-Awesome kommen per CDN (Play-CDN) — für „echte" Produktion ein
   Build-Step sinnvoll, aber funktional unkritisch.
-- Steuerung ist Maus/Trackpad-basiert (kein Touch); Layout ist auf Desktop-Breite
-  ausgelegt. Zoom per +/- Buttons, Mausrad oder Tastatur (+/-).
+- Responsiv: Desktop = 3 Spalten; unter 1024px gestapelt (Globus als Hero oben,
+  Panels darunter scrollbar). Steuerung: Maus (Drag/Rad), Touch (1 Finger drehen,
+  2 Finger Pinch-Zoom, Tippen wählt Tranche), Zoom-Buttons, Tastatur (+/-).
 - Die Orbit-Bahn einer Tranche wird aus **einem** repräsentativen Mitglied
   propagiert (eine Umlaufzeit) — sie zeigt den Pfad der Kette, nicht jede
   Einzelbahn separat.
