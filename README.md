@@ -27,7 +27,11 @@ zeigt die App einen ehrlichen Leerzustand statt erfundener Daten.
   Namen entlang der Kette ein; der Rest dimmt. Klick auf einen Satelliten im
   Globus wählt dessen Tranche. Liste rechts, neueste Starts zuerst.
 - **Sichtbar über Stadt**: Anzahl Satelliten aktuell ≥ 25° über dem lokalen Horizont
-  (echte Elevationswinkel-Geometrie aus den propagierten Positionen)
+  (echte Elevationswinkel-Geometrie) für 11 Städte inkl. Hochbreiten wie Oslo &
+  Reykjavík — macht den Abdeckungs-Gradient sichtbar (Pol = wenige, Mittelbreiten = viele).
+- **Nächste Starts**: kommende SpaceX/Starlink-Launches live von The Space Devs
+  (Launch Library 2), mit Mission, NET-Zeitpunkt und Status (Go / TBD / In Flight).
+  localStorage-gecacht (2 h) wegen ~15 Requests/h Free-Tier; fällt sauber aus.
 - TLE-Quelle (live / cache / paket) + TLE-Epoche (wie alt die Bahndaten sind)
 
 ## Hosting
