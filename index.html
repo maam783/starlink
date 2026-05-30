@@ -2124,25 +2124,36 @@
       a = new THREE.Vector3().crossVectors(u, a).normalize()
       const b = new THREE.Vector3().crossVectors(u, a).normalize()
       const cosG = Math.cos(gamma), sinG = Math.sin(gamma)
-      const ringPts = [], spokes = []
-      for (let i = 0; i <= 96; i++) {
-        const th = (i / 96) * Math.PI * 2
-        const p = new THREE.Vector3()
+      const SEG = 96
+      const ringPts = []
+      for (let i = 0; i <= SEG; i++) {
+        const th = (i / SEG) * Math.PI * 2
+        ringPts.push(new THREE.Vector3()
           .addScaledVector(u, cosG)
           .addScaledVector(a, sinG * Math.cos(th))
           .addScaledVector(b, sinG * Math.sin(th))
-          .multiplyScalar(ringR)
-        ringPts.push(p)
-        if (i % 24 === 0 && i < 96) spokes.push(u.clone().multiplyScalar(lift), p.clone())   // 4 spokes
+          .multiplyScalar(ringR))
       }
+
+      // Translucent funnel (cone mantle): apex at the city on the ground, widening up
+      // to the ring at orbit altitude. More opaque at the base, fading toward the rim.
+      const apex = u.clone().multiplyScalar(lift)
+      const col = new THREE.Color(0xfbbf24)
+      const cpos = [apex.x, apex.y, apex.z], ccol = [col.r, col.g, col.b, 0.55], cidx = []
+      for (let i = 0; i <= SEG; i++) { const p = ringPts[i]; cpos.push(p.x, p.y, p.z); ccol.push(col.r, col.g, col.b, 0.08) }
+      for (let i = 1; i <= SEG; i++) { cidx.push(0, i, i + 1) }
+      const coneGeo = new THREE.BufferGeometry()
+      coneGeo.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3))
+      coneGeo.setAttribute('color', new THREE.Float32BufferAttribute(ccol, 4))
+      coneGeo.setIndex(cidx)
+
       cityRing = new THREE.Group()
+      cityRing.add(new THREE.Mesh(coneGeo, new THREE.MeshBasicMaterial({
+        vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide
+      })))
       cityRing.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(ringPts),
         new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.9 })
-      ))
-      cityRing.add(new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(spokes),
-        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.25 })
       ))
       scene.add(cityRing)
     }
