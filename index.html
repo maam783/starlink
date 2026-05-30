@@ -440,7 +440,8 @@
     let selectedCity = null
     let raycaster, mouse
     let isDragging = false, previousMouseX = 0, previousMouseY = 0
-    let cameraAzimuth = 2.1, cameraElevation = 0.65, cameraDistance = 22
+    const DEFAULT_VIEW_DISTANCE = 22   // standard zoom (reset + city focus)
+    let cameraAzimuth = 2.1, cameraElevation = 0.65, cameraDistance = DEFAULT_VIEW_DISTANCE
     
     // Shell definitions (approximate real Starlink)
     const SHELLS = [
@@ -469,9 +470,7 @@
       { name: 'Beijing',     de: 'Peking',       lat: 39.9042, lon: 116.4074 },
       { name: 'Cairo',       de: 'Kairo',        lat: 30.0444, lon: 31.2357 },
       { name: 'Mexico City', de: 'Mexiko-Stadt', lat: 19.4326, lon: -99.1332 },
-      { name: 'Lagos',       lat: 6.5244,  lon: 3.3792 },
       { name: 'Nairobi',     lat: -1.2921, lon: 36.8219 },    // on the equator
-      { name: 'Quito',       lat: -0.1807, lon: -78.4678 },   // ~equator
       { name: 'Jakarta',     lat: -6.2088, lon: 106.8456 },
       { name: 'Buenos Aires', lat: -34.6037, lon: -58.3816 },
       { name: 'Ushuaia',     lat: -54.8019, lon: -68.3030 }   // southernmost city, coverage edge
@@ -1654,7 +1653,7 @@
       // Proportional to scroll magnitude (exp = smooth & multiplicative), but gentle.
       // Trackpads emit many small-delta events; the small factor keeps that controllable
       // instead of the old fixed 8%-per-event step that compounded far too fast.
-      const factor = Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.0016)
+      const factor = Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.0022)
       cameraDistance = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, cameraDistance * factor))
       updateCameraPosition()
     }
@@ -2072,7 +2071,7 @@
     // ============================================
     // CITY FOCUS + VISIBILITY
     // ============================================
-    function focusOnLatLon(latDeg, lonDeg, targetDistance = 14) {
+    function focusOnLatLon(latDeg, lonDeg, targetDistance = DEFAULT_VIEW_DISTANCE) {
       // Compute the 3D unit direction of the city using the exact same convention
       // as latLonToVector3 (including the longitude negation for correct orientation).
       const lat = latDeg * Math.PI / 180
@@ -2183,11 +2182,12 @@
       }
 
       // Translucent funnel (cone mantle): apex at the city on the ground, widening up
-      // to the ring at orbit altitude. More opaque at the base, fading toward the rim.
+      // to the ring at orbit altitude. Soft off-white, fairly transparent so the
+      // satellites stay visible through it.
       const apex = u.clone().multiplyScalar(lift)
-      const col = new THREE.Color(0xfbbf24)
-      const cpos = [apex.x, apex.y, apex.z], ccol = [col.r, col.g, col.b, 0.55], cidx = []
-      for (let i = 0; i <= SEG; i++) { const p = ringPts[i]; cpos.push(p.x, p.y, p.z); ccol.push(col.r, col.g, col.b, 0.08) }
+      const col = new THREE.Color(0xeceff3)   // gebrochenes Weiß / off-white
+      const cpos = [apex.x, apex.y, apex.z], ccol = [col.r, col.g, col.b, 0.32], cidx = []
+      for (let i = 0; i <= SEG; i++) { const p = ringPts[i]; cpos.push(p.x, p.y, p.z); ccol.push(col.r, col.g, col.b, 0.025) }
       for (let i = 1; i <= SEG; i++) { cidx.push(0, i, i + 1) }
       const coneGeo = new THREE.BufferGeometry()
       coneGeo.setAttribute('position', new THREE.Float32BufferAttribute(cpos, 3))
@@ -2200,7 +2200,7 @@
       })))
       cityRing.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(ringPts),
-        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.9 })
+        new THREE.LineBasicMaterial({ color: 0xeceff3, transparent: true, opacity: 0.55 })
       ))
       scene.add(cityRing)
     }
@@ -2398,7 +2398,7 @@
     function resetView() {
       cameraAzimuth = 2.1
       cameraElevation = 0.65
-      cameraDistance = 22
+      cameraDistance = DEFAULT_VIEW_DISTANCE
       updateCameraPosition()
 
       // Clear the selected-city marker + ring
@@ -2445,14 +2445,6 @@
 
       // Start animation
       animate()
-
-      // Slight initial camera animation feel
-      setTimeout(() => {
-        if (cameraDistance > 21) {
-          cameraDistance = 18.8
-          updateCameraPosition()
-        }
-      }, 800)
 
       // Final status
       console.log('%c[Starlink Control] Dashboard ready — real TLE constellation, SGP4 propagation.', 'color:#334466')
