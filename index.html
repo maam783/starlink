@@ -697,7 +697,7 @@
 
     function createStarfield() {
       const geometry = new THREE.BufferGeometry()
-      const starCount = 18000
+      const starCount = 2600   // sparse — just a hint of stars, not a dense field
       const positions = new Float32Array(starCount * 3)
       const colors = new Float32Array(starCount * 3)
       const sizes = new Float32Array(starCount)
@@ -711,12 +711,12 @@
         positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta)
         positions[i * 3 + 2] = radius * Math.cos(phi)
 
-        const brightness = 0.6 + Math.random() * 0.4
+        const brightness = 0.5 + Math.random() * 0.35
         colors[i * 3] = brightness
         colors[i * 3 + 1] = brightness
         colors[i * 3 + 2] = brightness * 0.95
 
-        sizes[i] = 0.7 + Math.random() * 1.8
+        sizes[i] = 0.6 + Math.random() * 1.4
       }
 
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -2105,10 +2105,10 @@
         Math.cos(latR) * Math.sin(lonR)
       )
 
-      // City dot on the ground — red, small (unlit so it always pops against the globe)
+      // City dot on the ground — classic map-pin red, small (unlit so it always pops)
       cityMarker = new THREE.Mesh(
-        new THREE.SphereGeometry(earthR * 0.0091, 14, 14),
-        new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        new THREE.SphereGeometry(earthR * 0.007, 14, 14),
+        new THREE.MeshBasicMaterial({ color: 0xd93025 })
       )
       cityMarker.position.copy(u).multiplyScalar(lift)
       scene.add(cityMarker)
@@ -2138,11 +2138,11 @@
       cityRing = new THREE.Group()
       cityRing.add(new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(ringPts),
-        new THREE.LineBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.9 })
+        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.9 })
       ))
       cityRing.add(new THREE.LineSegments(
         new THREE.BufferGeometry().setFromPoints(spokes),
-        new THREE.LineBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.25 })
+        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.25 })
       ))
       scene.add(cityRing)
     }
