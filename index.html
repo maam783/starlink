@@ -420,6 +420,8 @@
     let simTime = new Date()
     let lastRealTime = Date.now()
     let selectedOrbitLine = null   // THREE.Line: orbit track of the active tranche
+    let cityMarker = null, cityRing = null   // selected-city dot + horizon circle
+    let selectedCity = null
     let raycaster, mouse
     let isDragging = false, previousMouseX = 0, previousMouseY = 0
     let cameraAzimuth = 2.1, cameraElevation = 0.65, cameraDistance = 22
@@ -2060,6 +2062,62 @@
       step()
     }
 
+    function clearCityMarker() {
+      if (cityMarker) { scene.remove(cityMarker); cityMarker.geometry.dispose(); cityMarker.material.dispose(); cityMarker = null }
+      if (cityRing) { scene.remove(cityRing); cityRing.geometry.dispose(); cityRing.material.dispose(); cityRing = null }
+    }
+
+    // Place a marker at the city and draw the "visible horizon" circle around it:
+    // the ground cap within which a satellite at the mean shell altitude is above the
+    // MIN_ELEVATION mask (i.e. the region whose satellites count as visible).
+    function showCityMarker(lat, lon) {
+      clearCityMarker()
+      if (!scene) return
+      const earthR = CONFIG.EARTH_RADIUS * CONFIG.SCALE
+      const lift = earthR * 1.004
+      const latR = lat * Math.PI / 180, lonR = -lon * Math.PI / 180   // match latLonToVector3
+      const u = new THREE.Vector3(
+        Math.cos(latR) * Math.cos(lonR),
+        Math.sin(latR),
+        Math.cos(latR) * Math.sin(lonR)
+      )
+
+      // City dot (unlit so it always pops against the globe)
+      cityMarker = new THREE.Mesh(
+        new THREE.SphereGeometry(earthR * 0.013, 14, 14),
+        new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+      )
+      cityMarker.position.copy(u).multiplyScalar(lift)
+      scene.add(cityMarker)
+
+      // Horizon cap half-angle (geocentric) for the MIN_ELEVATION mask at mean altitude
+      const e = MIN_ELEVATION_DEG * Math.PI / 180
+      const h = (constStats && constStats.avgAlt) ? constStats.avgAlt : 550
+      const ratio = CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h)
+      let gamma = Math.acos(Math.max(-1, Math.min(1, ratio * Math.cos(e)))) - e
+      if (!isFinite(gamma) || gamma < 0.02) gamma = 0.13
+
+      // Orthonormal basis perpendicular to u
+      let a = (Math.abs(u.y) > 0.9) ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
+      a = new THREE.Vector3().crossVectors(u, a).normalize()
+      const b = new THREE.Vector3().crossVectors(u, a).normalize()
+      const cosG = Math.cos(gamma), sinG = Math.sin(gamma)
+      const pts = []
+      for (let i = 0; i <= 96; i++) {
+        const th = (i / 96) * Math.PI * 2
+        pts.push(new THREE.Vector3()
+          .addScaledVector(u, cosG)
+          .addScaledVector(a, sinG * Math.cos(th))
+          .addScaledVector(b, sinG * Math.sin(th))
+          .multiplyScalar(lift))
+      }
+      cityRing = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.75 })
+      )
+      scene.add(cityRing)
+    }
+
     // How many satellites are currently above MIN_ELEVATION_DEG over the local horizon
     // at this lat/lon — i.e. usable for a Starlink dish right now. Derived geometrically
     // from each satellite's propagated position (true elevation angle, not a geocentric
@@ -2103,16 +2161,20 @@
       container.innerHTML = ''
 
       CITIES.forEach(city => {
+        const active = selectedCity && selectedCity.name === city.name
         const row = document.createElement('div')
-        row.className = 'data-row flex items-center justify-between gap-2 py-1 px-2 rounded cursor-pointer hover:bg-slate-800/40 min-w-0'
+        row.className = 'data-row flex items-center justify-between gap-2 py-1 px-2 rounded cursor-pointer hover:bg-slate-800/40 min-w-0' +
+          (active ? ' bg-amber-500/10' : '')
         const count = citySatCounts[city.name] || 0
         const display = (lang === 'de' && city.de) ? city.de : city.name
         row.innerHTML = `
-          <span class="text-slate-200 text-[13px] truncate">${display}</span>
-          <div class="px-1.5 py-px text-[10px] rounded bg-blue-500/10 text-blue-300 tabular-nums shrink-0">${count}</div>
+          <span class="${active ? 'text-amber-300' : 'text-slate-200'} text-[13px] truncate">${display}</span>
+          <div class="px-1.5 py-px text-[10px] rounded ${active ? 'bg-amber-500/15 text-amber-300' : 'bg-blue-500/10 text-blue-300'} tabular-nums shrink-0">${count}</div>
         `
         row.onclick = () => {
+          selectedCity = city
           focusOnLatLon(city.lat, city.lon)
+          showCityMarker(city.lat, city.lon)
           // Immediately refresh count for this city (feels responsive)
           const newCount = countVisibleSatsFrom(city.lat, city.lon)
           citySatCounts[city.name] = newCount
@@ -2244,7 +2306,12 @@
       cameraElevation = 0.65
       cameraDistance = 22
       updateCameraPosition()
-      
+
+      // Clear the selected-city marker + ring
+      selectedCity = null
+      clearCityMarker()
+      if (typeof renderCitiesList === 'function') renderCitiesList()
+
       // Reset time to near real
       simTime = new Date()
     }

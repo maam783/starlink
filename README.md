@@ -32,6 +32,8 @@ zeigt die App einen ehrlichen Leerzustand statt erfundener Daten.
 - **Sichtbar über Stadt**: Anzahl Satelliten aktuell ≥ 25° über dem lokalen Horizont
   (echte Elevationswinkel-Geometrie) für 12 Städte inkl. Hochbreiten wie Oslo &
   Reykjavík — macht den Abdeckungs-Gradient sichtbar (Pol = wenige, Mittelbreiten = viele).
+  Klick zentriert die Stadt, setzt einen Marker und zeichnet den **Horizont-Radius**
+  (Boden-Kappe, innerhalb derer ein Sat in mittlerer Schalenhöhe ≥ 25° steht).
 - **Nächste Starts**: kommende SpaceX/Starlink-Launches live von The Space Devs
   (Launch Library 2). Zeigt die Schalen-Tendenz (aus dem Startplatz abgeleitet:
   Florida → ≈53°, Vandenberg → hohe Inkl. / polar), Gruppe, Ort, Countdown und
