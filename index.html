@@ -389,7 +389,7 @@
     const CONFIG = {
       EARTH_RADIUS: 6371,           // km
       SCALE: 0.001,                 // world units per km
-      SAT_POINT_SIZE: 0.38,         // VERY small points — crisp dots, not blobs
+      SAT_POINT_SIZE: 0.23,         // small crisp dots — avoids the "overcrowded blob" look
       MAX_SATS_TO_RENDER: 12000,
       ORBIT_POINTS: 72
     }
@@ -1320,7 +1320,7 @@
         blending: THREE.NormalBlending,   // much less glow/bloom than Additive
         vertexColors: true,
         sizeAttenuation: true,
-        opacity: 0.95
+        opacity: 0.9
       })
 
       satellitePoints = new THREE.Points(geo, mat)
@@ -1336,10 +1336,11 @@
       canvas.width = canvas.height = size
       const ctx = canvas.getContext('2d')
 
-      // Extremely tight, almost hard-edged glow — we want tiny points, not soft blobs
-      const grad = ctx.createRadialGradient(size/2, size/2, size * 0.04, size/2, size/2, size * 0.22)
+      // Crisp solid core + thin soft rim — so even small points stay clearly visible
+      // (a dot, not a fuzzy blob), which keeps the field readable when shrunk.
+      const grad = ctx.createRadialGradient(size/2, size/2, size * 0.02, size/2, size/2, size * 0.26)
       grad.addColorStop(0, 'rgba(255,255,255,1)')
-      grad.addColorStop(0.4, 'rgba(255,255,255,0.92)')
+      grad.addColorStop(0.55, 'rgba(255,255,255,0.95)')
       grad.addColorStop(1, 'rgba(255,255,255,0)')
 
       ctx.fillStyle = grad
