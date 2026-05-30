@@ -2064,12 +2064,19 @@
 
     function clearCityMarker() {
       if (cityMarker) { scene.remove(cityMarker); cityMarker.geometry.dispose(); cityMarker.material.dispose(); cityMarker = null }
-      if (cityRing) { scene.remove(cityRing); cityRing.geometry.dispose(); cityRing.material.dispose(); cityRing = null }
+      if (cityRing) {
+        scene.remove(cityRing)
+        cityRing.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose() })
+        cityRing = null
+      }
     }
 
-    // Place a marker at the city and draw the "visible horizon" circle around it:
-    // the ground cap within which a satellite at the mean shell altitude is above the
-    // MIN_ELEVATION mask (i.e. the region whose satellites count as visible).
+    // Place a marker at the city and draw its "visible horizon" ring.
+    // IMPORTANT: the ring is drawn at the mean satellite ALTITUDE, not on the ground.
+    // The satellite dots are rendered at orbit height, so a ground circle would (by
+    // perspective) sit "inside" them and enclose far fewer dots than are actually
+    // visible. Drawing the cap boundary at altitude makes the ring enclose ≈ the
+    // satellites the count reports.
     function showCityMarker(lat, lon) {
       clearCityMarker()
       if (!scene) return
@@ -2082,7 +2089,7 @@
         Math.cos(latR) * Math.sin(lonR)
       )
 
-      // City dot (unlit so it always pops against the globe)
+      // City dot on the ground (unlit so it always pops against the globe)
       cityMarker = new THREE.Mesh(
         new THREE.SphereGeometry(earthR * 0.013, 14, 14),
         new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
@@ -2090,31 +2097,40 @@
       cityMarker.position.copy(u).multiplyScalar(lift)
       scene.add(cityMarker)
 
-      // Horizon cap half-angle (geocentric) for the MIN_ELEVATION mask at mean altitude
+      // Cap half-angle (geocentric) for the MIN_ELEVATION mask at mean altitude
       const e = MIN_ELEVATION_DEG * Math.PI / 180
       const h = (constStats && constStats.avgAlt) ? constStats.avgAlt : 550
       const ratio = CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h)
       let gamma = Math.acos(Math.max(-1, Math.min(1, ratio * Math.cos(e)))) - e
       if (!isFinite(gamma) || gamma < 0.02) gamma = 0.13
+      const ringR = (CONFIG.EARTH_RADIUS + h) * CONFIG.SCALE   // ring at orbit altitude
 
       // Orthonormal basis perpendicular to u
       let a = (Math.abs(u.y) > 0.9) ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
       a = new THREE.Vector3().crossVectors(u, a).normalize()
       const b = new THREE.Vector3().crossVectors(u, a).normalize()
       const cosG = Math.cos(gamma), sinG = Math.sin(gamma)
-      const pts = []
+      const ringPts = [], spokes = []
       for (let i = 0; i <= 96; i++) {
         const th = (i / 96) * Math.PI * 2
-        pts.push(new THREE.Vector3()
+        const p = new THREE.Vector3()
           .addScaledVector(u, cosG)
           .addScaledVector(a, sinG * Math.cos(th))
           .addScaledVector(b, sinG * Math.sin(th))
-          .multiplyScalar(lift))
+          .multiplyScalar(ringR)
+        ringPts.push(p)
+        // a few faint spokes from the ground marker up to the ring → reads as a dome
+        if (i % 12 === 0) { spokes.push(u.clone().multiplyScalar(lift), p.clone()) }
       }
-      cityRing = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.75 })
-      )
+      cityRing = new THREE.Group()
+      cityRing.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(ringPts),
+        new THREE.LineBasicMaterial({ color: 0xfcd34d, transparent: true, opacity: 0.95 })
+      ))
+      cityRing.add(new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(spokes),
+        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.25 })
+      ))
       scene.add(cityRing)
     }
 
