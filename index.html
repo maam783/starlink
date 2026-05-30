@@ -10,17 +10,26 @@
   <meta property="og:description" content="Live 3D map of the Starlink constellation from real TLE data. Unofficial — not affiliated with SpaceX.">
   <meta property="og:type" content="website">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233b82f6'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="vendor/tailwind.js"></script>
+  <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
-    
+    /* Self-hosted fonts — no third-party (Google Fonts) request, no visitor IP leak.
+       Both are variable woff2 (latin subset) covering the weights we use. */
+    @font-face {
+      font-family: 'Inter'; font-style: normal; font-weight: 400 600;
+      font-display: swap; src: url('fonts/inter-latin.woff2') format('woff2');
+    }
+    @font-face {
+      font-family: 'Space Grotesk'; font-style: normal; font-weight: 500 600;
+      font-display: swap; src: url('fonts/spacegrotesk-latin.woff2') format('woff2');
+    }
+
     :root {
       --accent: #3b82f6;
     }
-    
+
     body {
-      font-family: 'Inter', system_ui, sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
     }
     
     .font-display {
@@ -348,15 +357,15 @@
       </div>
 
       <!-- Cities — satellites currently visible overhead -->
-      <div class="p-5 lg:flex-1 lg:min-h-0">
-        <div class="flex items-center justify-between mb-2">
+      <div class="p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+        <div class="flex items-center justify-between mb-2 lg:shrink-0">
           <div class="section-title" data-i18n="visibleOverCity">SICHTBAR ÜBER STADT</div>
           <div class="text-slate-500 text-[10px]" data-i18n="visibleHint">≥25° • Klick zentriert</div>
         </div>
-        <div id="cities-list" class="grid grid-cols-2 gap-x-3 gap-y-0.5">
-          <!-- Populated by JS in renderCitiesList() — 2 columns to stay compact -->
+        <div id="cities-list" class="grid grid-cols-2 gap-x-3 gap-y-0.5 lg:overflow-auto lg:flex-1 lg:min-h-0 pr-1">
+          <!-- Populated by JS in renderCitiesList() — 2 columns, sorted by latitude -->
         </div>
-        <div class="mt-4 text-[10px] text-slate-500 leading-relaxed" data-i18n-html="globeHint">
+        <div class="mt-3 text-[10px] text-slate-500 leading-relaxed lg:shrink-0" data-i18n-html="globeHint">
           Satellit im Globus anklicken → ganze <span class="text-blue-300">Start-Kette</span> wird hervorgehoben · <span class="text-slate-300">Esc</span> = zurück
         </div>
       </div>
@@ -386,8 +395,8 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
-  <script src="https://unpkg.com/satellite.js@4.1.4/dist/satellite.min.js"></script>
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/satellite.min.js"></script>
   
   <script>
     // ============================================
@@ -455,7 +464,17 @@
       { name: 'Dubai',       lat: 25.2048, lon: 55.2708 },
       { name: 'Cape Town',   de: 'Kapstadt',  lat: -33.9249, lon: 18.4241 },
       { name: 'Oslo',        lat: 59.9139, lon: 10.7522 },    // high latitude, coverage edge
-      { name: 'Reykjavík',   lat: 64.1466, lon: -21.9426 }    // polar-shell territory
+      { name: 'Reykjavík',   lat: 64.1466, lon: -21.9426 },   // polar-shell territory
+      { name: 'Moscow',      de: 'Moskau',       lat: 55.7558, lon: 37.6173 },
+      { name: 'Beijing',     de: 'Peking',       lat: 39.9042, lon: 116.4074 },
+      { name: 'Cairo',       de: 'Kairo',        lat: 30.0444, lon: 31.2357 },
+      { name: 'Mexico City', de: 'Mexiko-Stadt', lat: 19.4326, lon: -99.1332 },
+      { name: 'Lagos',       lat: 6.5244,  lon: 3.3792 },
+      { name: 'Nairobi',     lat: -1.2921, lon: 36.8219 },    // on the equator
+      { name: 'Quito',       lat: -0.1807, lon: -78.4678 },   // ~equator
+      { name: 'Jakarta',     lat: -6.2088, lon: 106.8456 },
+      { name: 'Buenos Aires', lat: -34.6037, lon: -58.3816 },
+      { name: 'Ushuaia',     lat: -54.8019, lon: -68.3030 }   // southernmost city, coverage edge
     ]
 
     let citySatCounts = {}   // name → last computed visible count
@@ -930,9 +949,9 @@
     }
 
     async function loadContinentOutlines() {
-      // Real continent outlines from Natural Earth (public GitHub GeoJSON)
-      // Works on Vercel and normal browsers. Fails gracefully on file:// / offline / strict CORS.
-      const url = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson'
+      // Real continent outlines from Natural Earth — vendored locally (same-origin),
+      // so no third-party (GitHub) request at runtime. Public domain.
+      const url = 'data/ne_110m_land.geojson'
       const earthR = (CONFIG.EARTH_RADIUS + 9) * CONFIG.SCALE   // raised a bit higher so lines float cleanly above surface
 
       try {
@@ -1027,9 +1046,9 @@
     }
 
     async function loadCountryBorders() {
-      // Worldwide country borders from Natural Earth (public GitHub GeoJSON)
+      // Worldwide country borders from Natural Earth — vendored locally (same-origin).
       // Slightly different style from continent outlines so they are distinguishable.
-      const url = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson'
+      const url = 'data/ne_110m_admin_0_countries.geojson'
       const r = (CONFIG.EARTH_RADIUS + 11) * CONFIG.SCALE   // a bit higher than continents
 
       try {
@@ -2228,7 +2247,11 @@
       if (!container) return
       container.innerHTML = ''
 
-      CITIES.forEach(city => {
+      // Sorted North → South: stable order (no jumping as counts update) and it makes
+      // the coverage-vs-latitude pattern visible (peak at mid-latitudes, low at the
+      // poles/equator) as you read down the list.
+      const sorted = CITIES.slice().sort((a, b) => b.lat - a.lat)
+      sorted.forEach(city => {
         const active = selectedCity && selectedCity.name === city.name
         const row = document.createElement('div')
         row.className = 'data-row flex items-center justify-between gap-2 py-1 px-2 rounded cursor-pointer hover:bg-slate-800/40 min-w-0' +

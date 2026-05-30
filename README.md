@@ -59,10 +59,20 @@ Die GitHub Action lädt täglich (05:00 UTC) frische TLE von Celestrak und commi
 Verfügbarkeit/Limits zur Ladezeit. Manuell auslösbar über den **Actions**-Tab
 („Run workflow"). Benötigt `contents: write` (ist im Workflow gesetzt).
 
+## Assets & Datenschutz
+
+Alle statischen Abhängigkeiten sind **selbst gehostet** (in `vendor/`, `fonts/`,
+`data/`) — Schriften (Inter/Space Grotesk woff2), Tailwind, Font Awesome, three.js,
+satellite.js und die Natural-Earth-GeoJSON. Dadurch wird zur Laufzeit **keine
+Besucher-IP an Dritte** (Google Fonts, CDNs, GitHub raw) übertragen. Die einzigen
+externen Aufrufe sind die Live-Datenquellen **Celestrak** (TLE) und **The Space
+Devs** (Starts) — die Kernfunktion. Keine Cookies/Tracking; `localStorage` nur
+funktional (TLE-/Launch-Cache, Sprache).
+
 ## Bekannte Einschränkungen
 
-- Tailwind & Font-Awesome kommen per CDN (Play-CDN) — für „echte" Produktion ein
-  Build-Step sinnvoll, aber funktional unkritisch.
+- Tailwind läuft als Play-CDN-Skript (lokal gehostet) im Browser-JIT — für „echte"
+  Produktion ein Build-Step sinnvoll, aber funktional unkritisch.
 - Responsiv: Desktop = 3 Spalten; unter 1024px gestapelt (Globus als Hero oben,
   Panels darunter scrollbar). Steuerung: Maus (Drag/Rad), Touch (1 Finger drehen,
   2 Finger Pinch-Zoom, Tippen wählt Tranche), Zoom-Buttons, Tastatur (+/-).
