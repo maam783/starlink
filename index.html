@@ -1470,25 +1470,40 @@
       const sat = satData[g.indices[Math.floor(g.indices.length / 2)]]
       if (!sat || !sat.satrec || !shellVisibility[sat.shellId]) return
 
-      const periodMin = (sat.period && sat.period > 0) ? sat.period : 95
-      const steps = 160
-      const baseMs = simTime.getTime()
+      // Draw the INSTANTANEOUS orbital-plane circle (the ring the satellites actually
+      // lie on right now), NOT the ground track. Take the rep. satellite's ECI position
+      // + velocity → the orbit plane, sample the circle, then transform ECI → the same
+      // Earth-fixed render frame the dots use (rotate by gmst, remap axes).
+      const pv = window.satellite.propagate(sat.satrec, simTime)
+      if (!pv || !pv.position || !pv.velocity) return
+      const gmst = window.satellite.gstime(simTime)
+
+      const r = new THREE.Vector3(pv.position.x, pv.position.y, pv.position.z)
+      const v = new THREE.Vector3(pv.velocity.x, pv.velocity.y, pv.velocity.z)
+      const radius = r.length()
+      if (!isFinite(radius) || radius < 6500) return
+      const rHat = r.clone().normalize()
+      const nHat = new THREE.Vector3().crossVectors(r, v).normalize()       // orbit normal
+      const tHat = new THREE.Vector3().crossVectors(nHat, rHat).normalize() // in-plane, along motion
+
+      // ECI → render frame: ECEF = Rz(-gmst)·ECI ; render = (ecef_x, ecef_z, -ecef_y)
+      const cosG = Math.cos(gmst), sinG = Math.sin(gmst), S = CONFIG.SCALE
+      const toRender = (e) => new THREE.Vector3(
+        (e.x * cosG + e.y * sinG) * S,
+        e.z * S,
+        -(-e.x * sinG + e.y * cosG) * S
+      )
+
       const points = []
+      const steps = 128
       for (let i = 0; i <= steps; i++) {
-        const t = new Date(baseMs + (i / steps) * periodMin * 60000)
-        const p = window.satellite.propagate(sat.satrec, t)
-        if (!p || !p.position) continue
-        const gd = window.satellite.eciToGeodetic(p.position, window.satellite.gstime(t))
-        const r = (CONFIG.EARTH_RADIUS + (gd.height || sat.altitude)) * CONFIG.SCALE
-        points.push(new THREE.Vector3(
-          r * Math.cos(gd.latitude) * Math.cos(-gd.longitude),
-          r * Math.sin(gd.latitude),
-          r * Math.cos(gd.latitude) * Math.sin(-gd.longitude)
-        ))
+        const th = (i / steps) * Math.PI * 2
+        const eci = rHat.clone().multiplyScalar(radius * Math.cos(th))
+          .addScaledVector(tHat, radius * Math.sin(th))
+        points.push(toRender(eci))
       }
-      if (points.length < 2) return
       const geo = new THREE.BufferGeometry().setFromPoints(points)
-      const mat = new THREE.LineBasicMaterial({ color: shellColor(g.shellId), transparent: true, opacity: 0.55 })
+      const mat = new THREE.LineBasicMaterial({ color: shellColor(g.shellId), transparent: true, opacity: 0.7 })
       selectedOrbitLine = new THREE.Line(geo, mat)
       orbitLinesGroup.add(selectedOrbitLine)
     }
@@ -1983,10 +1998,11 @@
       const _activeTranche = selectedTrancheKey
       updateTrancheLabels()
 
-      // Keep the tranche's orbit track current as simulation time advances
+      // Keep the orbit ring aligned with the constellation as time advances (the ring
+      // rotates with the Earth-fixed frame). Cheap now (1 propagation), so refresh often.
       if (_activeTranche && timeMultiplier > 0) {
         const now = Date.now()
-        if (!window._lastOrbitRedraw || now - window._lastOrbitRedraw > 2500) {
+        if (!window._lastOrbitRedraw || now - window._lastOrbitRedraw > 250) {
           drawTrancheOrbit(_activeTranche)
           window._lastOrbitRedraw = now
         }
@@ -2089,55 +2105,45 @@
         Math.cos(latR) * Math.sin(lonR)
       )
 
-      // City dot on the ground (unlit so it always pops against the globe)
+      // City dot on the ground — red, small (unlit so it always pops against the globe)
       cityMarker = new THREE.Mesh(
-        new THREE.SphereGeometry(earthR * 0.013, 14, 14),
-        new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+        new THREE.SphereGeometry(earthR * 0.0091, 14, 14),
+        new THREE.MeshBasicMaterial({ color: 0xef4444 })
       )
       cityMarker.position.copy(u).multiplyScalar(lift)
       scene.add(cityMarker)
 
-      // Filled coverage disc on the ground: opaque at the city (overhead = strongest
-      // reachability) fading to transparent at the local horizon (0° elevation, where a
-      // satellite at mean altitude drops out of view). A qualitative "reach" gradient.
+      // Horizon ring at orbit altitude (cap boundary for the 25° mask) + 4 spokes → dome
+      const e = MIN_ELEVATION_DEG * Math.PI / 180
       const h = (constStats && constStats.avgAlt) ? constStats.avgAlt : 550
-      const horizonGamma = Math.acos(Math.max(-1, Math.min(1, CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h))))  // 0° cap
+      let gamma = Math.acos(Math.max(-1, Math.min(1, (CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h)) * Math.cos(e)))) - e
+      if (!isFinite(gamma) || gamma < 0.02) gamma = 0.13
+      const ringR = (CONFIG.EARTH_RADIUS + h) * CONFIG.SCALE
 
       let a = (Math.abs(u.y) > 0.9) ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
       a = new THREE.Vector3().crossVectors(u, a).normalize()
       const b = new THREE.Vector3().crossVectors(u, a).normalize()
-      const col = new THREE.Color(0xfbbf24)
-      const RINGS = 12, SEG = 64, stride = SEG + 1
-      const pos = [], colr = [], idx = []
-      for (let r = 0; r <= RINGS; r++) {
-        const frac = r / RINGS
-        const g = frac * horizonGamma
-        const alpha = Math.pow(1 - frac, 1.8) * 0.55   // strong core, soft fade to 0 at horizon
-        const cg = Math.cos(g), sg = Math.sin(g)
-        for (let s = 0; s <= SEG; s++) {
-          const th = (s / SEG) * Math.PI * 2
-          const p = new THREE.Vector3()
-            .addScaledVector(u, cg)
-            .addScaledVector(a, sg * Math.cos(th))
-            .addScaledVector(b, sg * Math.sin(th))
-            .multiplyScalar(lift)
-          pos.push(p.x, p.y, p.z)
-          colr.push(col.r, col.g, col.b, alpha)
-        }
+      const cosG = Math.cos(gamma), sinG = Math.sin(gamma)
+      const ringPts = [], spokes = []
+      for (let i = 0; i <= 96; i++) {
+        const th = (i / 96) * Math.PI * 2
+        const p = new THREE.Vector3()
+          .addScaledVector(u, cosG)
+          .addScaledVector(a, sinG * Math.cos(th))
+          .addScaledVector(b, sinG * Math.sin(th))
+          .multiplyScalar(ringR)
+        ringPts.push(p)
+        if (i % 24 === 0 && i < 96) spokes.push(u.clone().multiplyScalar(lift), p.clone())   // 4 spokes
       }
-      for (let r = 0; r < RINGS; r++) {
-        for (let s = 0; s < SEG; s++) {
-          const i0 = r * stride + s, i1 = i0 + 1, i2 = (r + 1) * stride + s, i3 = i2 + 1
-          idx.push(i0, i2, i1, i1, i2, i3)
-        }
-      }
-      const dGeo = new THREE.BufferGeometry()
-      dGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-      dGeo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 4))   // RGBA → per-vertex alpha
-      dGeo.setIndex(idx)
-      cityRing = new THREE.Mesh(dGeo, new THREE.MeshBasicMaterial({
-        vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide
-      }))
+      cityRing = new THREE.Group()
+      cityRing.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(ringPts),
+        new THREE.LineBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.9 })
+      ))
+      cityRing.add(new THREE.LineSegments(
+        new THREE.BufferGeometry().setFromPoints(spokes),
+        new THREE.LineBasicMaterial({ color: 0xf87171, transparent: true, opacity: 0.25 })
+      ))
       scene.add(cityRing)
     }
 
