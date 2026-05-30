@@ -2097,40 +2097,47 @@
       cityMarker.position.copy(u).multiplyScalar(lift)
       scene.add(cityMarker)
 
-      // Cap half-angle (geocentric) for the MIN_ELEVATION mask at mean altitude
-      const e = MIN_ELEVATION_DEG * Math.PI / 180
+      // Filled coverage disc on the ground: opaque at the city (overhead = strongest
+      // reachability) fading to transparent at the local horizon (0° elevation, where a
+      // satellite at mean altitude drops out of view). A qualitative "reach" gradient.
       const h = (constStats && constStats.avgAlt) ? constStats.avgAlt : 550
-      const ratio = CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h)
-      let gamma = Math.acos(Math.max(-1, Math.min(1, ratio * Math.cos(e)))) - e
-      if (!isFinite(gamma) || gamma < 0.02) gamma = 0.13
-      const ringR = (CONFIG.EARTH_RADIUS + h) * CONFIG.SCALE   // ring at orbit altitude
+      const horizonGamma = Math.acos(Math.max(-1, Math.min(1, CONFIG.EARTH_RADIUS / (CONFIG.EARTH_RADIUS + h))))  // 0° cap
 
-      // Orthonormal basis perpendicular to u
       let a = (Math.abs(u.y) > 0.9) ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)
       a = new THREE.Vector3().crossVectors(u, a).normalize()
       const b = new THREE.Vector3().crossVectors(u, a).normalize()
-      const cosG = Math.cos(gamma), sinG = Math.sin(gamma)
-      const ringPts = [], spokes = []
-      for (let i = 0; i <= 96; i++) {
-        const th = (i / 96) * Math.PI * 2
-        const p = new THREE.Vector3()
-          .addScaledVector(u, cosG)
-          .addScaledVector(a, sinG * Math.cos(th))
-          .addScaledVector(b, sinG * Math.sin(th))
-          .multiplyScalar(ringR)
-        ringPts.push(p)
-        // a few faint spokes from the ground marker up to the ring → reads as a dome
-        if (i % 12 === 0) { spokes.push(u.clone().multiplyScalar(lift), p.clone()) }
+      const col = new THREE.Color(0xfbbf24)
+      const RINGS = 12, SEG = 64, stride = SEG + 1
+      const pos = [], colr = [], idx = []
+      for (let r = 0; r <= RINGS; r++) {
+        const frac = r / RINGS
+        const g = frac * horizonGamma
+        const alpha = Math.pow(1 - frac, 1.8) * 0.55   // strong core, soft fade to 0 at horizon
+        const cg = Math.cos(g), sg = Math.sin(g)
+        for (let s = 0; s <= SEG; s++) {
+          const th = (s / SEG) * Math.PI * 2
+          const p = new THREE.Vector3()
+            .addScaledVector(u, cg)
+            .addScaledVector(a, sg * Math.cos(th))
+            .addScaledVector(b, sg * Math.sin(th))
+            .multiplyScalar(lift)
+          pos.push(p.x, p.y, p.z)
+          colr.push(col.r, col.g, col.b, alpha)
+        }
       }
-      cityRing = new THREE.Group()
-      cityRing.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(ringPts),
-        new THREE.LineBasicMaterial({ color: 0xfcd34d, transparent: true, opacity: 0.95 })
-      ))
-      cityRing.add(new THREE.LineSegments(
-        new THREE.BufferGeometry().setFromPoints(spokes),
-        new THREE.LineBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.25 })
-      ))
+      for (let r = 0; r < RINGS; r++) {
+        for (let s = 0; s < SEG; s++) {
+          const i0 = r * stride + s, i1 = i0 + 1, i2 = (r + 1) * stride + s, i3 = i2 + 1
+          idx.push(i0, i2, i1, i1, i2, i3)
+        }
+      }
+      const dGeo = new THREE.BufferGeometry()
+      dGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      dGeo.setAttribute('color', new THREE.Float32BufferAttribute(colr, 4))   // RGBA → per-vertex alpha
+      dGeo.setIndex(idx)
+      cityRing = new THREE.Mesh(dGeo, new THREE.MeshBasicMaterial({
+        vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide
+      }))
       scene.add(cityRing)
     }
 
