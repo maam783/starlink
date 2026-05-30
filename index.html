@@ -2234,6 +2234,9 @@
           selectedCity = city
           focusOnLatLon(city.lat, city.lon)
           showCityMarker(city.lat, city.lon)
+          // Mobile/stacked layout: the globe is the hero up top, the list is below it —
+          // scroll back up so the user actually sees the focus + marker.
+          if (window.innerWidth < 1024) window.scrollTo({ top: 0, behavior: 'smooth' })
           // Immediately refresh count for this city (feels responsive)
           const newCount = countVisibleSatsFrom(city.lat, city.lon)
           citySatCounts[city.name] = newCount
