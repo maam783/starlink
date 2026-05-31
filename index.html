@@ -1310,6 +1310,16 @@
     // ============================================
     // SATELLITE RENDERING (Points)
     // ============================================
+    // Brighten the shell colours a bit for the dots only (better visibility on phone
+    // screens / in daylight) without enlarging them. Legend/orbit keep the base hues.
+    const SAT_BRIGHTNESS = 1.4
+    function brightenColor(c) {
+      c.r = Math.min(1, c.r * SAT_BRIGHTNESS)
+      c.g = Math.min(1, c.g * SAT_BRIGHTNESS)
+      c.b = Math.min(1, c.b * SAT_BRIGHTNESS)
+      return c
+    }
+
     function createSatellitePoints() {
       if (satellitePoints) {
         scene.remove(satellitePoints)
@@ -1325,7 +1335,7 @@
       // re-allocating a THREE.Color for every point on every frame (big GC win).
       const tmpColor = new THREE.Color()
       for (let i = 0; i < count; i++) {
-        tmpColor.set(satData[i].color)
+        brightenColor(tmpColor.set(satData[i].color))
         colors[i * 3] = tmpColor.r
         colors[i * 3 + 1] = tmpColor.g
         colors[i * 3 + 2] = tmpColor.b
@@ -1347,7 +1357,7 @@
         blending: THREE.NormalBlending,   // much less glow/bloom than Additive
         vertexColors: true,
         sizeAttenuation: true,
-        opacity: 0.9
+        opacity: 1.0
       })
 
       satellitePoints = new THREE.Points(geo, mat)
@@ -1475,7 +1485,8 @@
 
       for (let i = 0; i < satData.length; i++) {
         tmp.set(satData[i].color)
-        if (!set) {                                   // no selection → base look
+        if (!set) {                                   // no selection → base look (brightened)
+          brightenColor(tmp)
           colAttr.setXYZ(i, tmp.r, tmp.g, tmp.b)
           sizeAttr.setX(i, baseSizeFor(i))
         } else if (set.has(i)) {                      // tranche member → bright + bigger
